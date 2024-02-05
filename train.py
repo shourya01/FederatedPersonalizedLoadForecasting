@@ -163,7 +163,7 @@ if __name__=="__main__":
             for li,(lo,lk) in enumerate(zip(localOptNames,localOptKw)):
                 errors, me = learn_model(comm,cData,lk,lo,lo.__name__,gk,go,go.__name__,model_kw,pl,pn,device)
                 if cData.save_at_end:
-                    topdir = os.getcwd()+f"/experiments/{pn}_{go.__name__}_{lo.__name__}/{'server' if comm.Get_rank()==0 else f'client{comm.Get_rank()-1}'}"
+                    topdir = os.getcwd()+f"/experiments{cData.state}/{pn}_{go.__name__}_{lo.__name__}/{'server' if comm.Get_rank()==0 else f'client{comm.Get_rank()-1}'}"
                     if not os.path.exists(topdir):
                         os.makedirs(topdir)
                     torch.save(me.model.state_dict(),topdir+'/model.pth')
