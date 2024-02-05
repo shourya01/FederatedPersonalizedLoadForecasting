@@ -64,10 +64,14 @@ class DatasetCleaner:
     
     # ingest numpy file, output random samples of train, or test set
     
-    def __init__(self,dset,cidx=0,seq_len=12,lookahead=4,train_test_split=0.8,dtype=torch.float32,device='cpu'):
+    def __init__(self,dset,cidx=0,clientList=[],seq_len=12,lookahead=4,train_test_split=0.8,dtype=torch.float32,device='cpu'):
         
         self.dset = dset[:,:,:].copy()
         self.cidx = cidx
+        if (clientList is None) or (clientList==[]):
+            self.clientList = np.arange(self.dset.shape[0])
+        else:
+            self.clientList = clientList
         self.seq_len = seq_len
         self.lookahead = lookahead
         self.tts = train_test_split
@@ -100,7 +104,7 @@ class DatasetCleaner:
     def gen_dset(self,cidx):
         
         inp, out = [], []
-        cidxNew = 3*cidx
+        cidxNew = self.clientList[cidx]
         for tidx in range(self.dset_train[cidxNew,:,:].shape[0]-self.seq_len-self.lookahead):
             inp.append(self.dset_train[cidxNew,tidx:tidx+self.seq_len,:])
             out.append(self.dset_train[cidxNew,tidx+self.seq_len+self.lookahead,[0]])

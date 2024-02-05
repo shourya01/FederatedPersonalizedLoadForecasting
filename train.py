@@ -6,12 +6,18 @@ from copy import deepcopy
 from models import LSTMForecast
 from mpi4py import MPI
 import os
+import argparse
 
 from torch.nn.functional import mse_loss as MSELoss
 
 from ServerOptimizers import FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam
 from ClientOptimizers import Prox, ProxAdam, Adam, AdamAMS
 from utils import DatasetCleaner, ModelExtractor, set_seed
+
+#args
+parser = argparse.ArgumentParser(description='Description of your program')
+parser.add_argument('--state',type=str,default='CA')
+args = parser.parse_args()
  
 # we use convention that the update should be 'added' to states
 # do local gradient calcs accordingly
@@ -30,18 +36,17 @@ class CData:
         self.beta_2 = 0.99
         self.eps = 1e-8
         self.n_clients = 10
-        self.state = 'NY'
+        self.state = args.state
         self.train_test_split = 0.8
         self.local_epochs = 4
-        self.global_epochs = 1000
+        self.global_epochs = 2500
         self.net_hidden_size = 20
         self.n_lstm_layers = 2
         self.weight_decay = 1e-1
         self.test_every = 50
         self.save_at_end = True
         
-def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,
-    global_opt,global_name,model_kw,p_layers,p_name,device):
+def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
     
     # set seed
     set_seed(10)
@@ -74,7 +79,7 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,
     else:
         # clients
         client_id = rank - 1 # because 0 is server
-        dset = DatasetCleaner(np.load(f'NREL{cData.state}dataset.npz')['data'],cidx=client_id,seq_len=cData.seq_len,
+        dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=client_id,clientList=[3*i for i in range(comm.Get_size()-1)],seq_len=cData.seq_len,
                 lookahead=cData.lookahead,train_test_split=cData.train_test_split,device=device)
         model = LSTMForecast(**model_kw).to(device) # client's local model
         localOpt = local_opt(model=model,p_layers=p_layers,**local_kw)
