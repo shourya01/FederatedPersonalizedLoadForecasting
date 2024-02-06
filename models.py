@@ -10,7 +10,7 @@ class LSTMForecast(nn.Module):
         self.n_lstm_layers = n_lstm_layers
         self.n_hidden_size = n_hidden_size
         self.lookahead = lookahead
-        self.fcnn_in_size = self.n_hidden_size*(self.lookback+self.lookahead)
+        self.fcnn_in_size = self.n_hidden_size
         
         # LSTM
         self.lstm_model = nn.LSTM(input_size=n_features,hidden_size=n_hidden_size,num_layers=n_lstm_layers,batch_first=True,bidirectional=False)
@@ -35,10 +35,11 @@ class LSTMForecast(nn.Module):
         ht,ct = self._init_hidden(x.shape,x.device)
         
         # get output of LSTM
-        x, (ht,ct) = self.lstm_model(x,(ht.detach(),ct.detach()))
+        for t in range(self.lookahead+self.lookback):
+            _, (ht,ct) = self.lstm_model(x[:,[t],:],(ht,ct))
         
         # pass through fully connected layers
-        return self._forward_fcnn(torch.cat(x.unbind(dim=1),dim=1))
+        return self._forward_fcnn(ht[-1,:,:])
     
     def _init_hidden(self,shape,device):
         
