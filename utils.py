@@ -89,8 +89,8 @@ class DatasetCleaner:
         minval,maxval = [], []
         
         for fidx in range(self.dset.shape[-1]):
-            minval.append(self.dset_train[:,:,fidx].min())
-            maxval.append(self.dset_train[:,:,fidx].max())
+            minval.append(self.dset_train[self.clientList,:,fidx].min())
+            maxval.append(self.dset_train[self.clientList,:,fidx].max())
             
             if minval[-1] == maxval[-1]:
                 self.dset_train[:,:,fidx], self.dset_test[:,:,fidx] = 1,1

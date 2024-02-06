@@ -31,20 +31,20 @@ class CData:
         self.lookahead = 4
         self.batch_size = 64
         self.lr = 5e-4
-        self.server_lr = 1e-2
+        self.server_lr = 1e-3
         self.beta = 0.9
         self.beta_1 = 0.9
-        self.beta_2 = 0.99
+        self.beta_2 = 0.9
         self.eps = 1e-8
-        self.n_clients = 10
+        self.n_clients = 12
         self.state = args.state
         self.train_test_split = 0.8
-        self.local_epochs = 4
-        self.global_epochs = 2500
-        self.net_hidden_size = 20
+        self.local_epochs = 100
+        self.global_epochs = 100
+        self.net_hidden_size = 25
         self.n_lstm_layers = 2
         self.weight_decay = 1e-1
-        self.test_every = 50
+        self.test_every = 5
         self.save_at_end = True
         
 def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
@@ -130,7 +130,7 @@ if __name__=="__main__":
                 device = f'cuda:{idx}'
     
     # model config
-    model_kw = {'n_features':cData.n_features,'n_lookback':cData.seq_len,'n_lstm_layers':cData.n_lstm_layers,'n_hidden_size':cData.net_hidden_size,'lookahead':cData.lookahead}
+    model_kw = {'n_features':cData.n_features,'n_lookback':cData.seq_len,'n_lstm_layers':cData.n_lstm_layers,'n_hidden_size':cData.net_hidden_size}
     dummyModel = LSTMForecast(**model_kw) # for extracting layer data
     
     # local optim partial config
@@ -152,7 +152,7 @@ if __name__=="__main__":
     
     # personalization levels
     pers0 = [] # all shared
-    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','prelu1.weight'] # linear head personalized
+    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer3.weight','FCLayer2.bias','prelu1.weight','prelu2.weight'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
     pLayers = [pers0,pers1,pers2]
     pLayerNames = ['allShared','linearHeadPersonalized','allPersonalized']

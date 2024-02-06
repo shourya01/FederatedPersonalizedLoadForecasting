@@ -3,14 +3,13 @@ import torch.nn as nn
 
 class LSTMForecast(nn.Module):
     
-    def __init__(self,n_features,n_lookback,n_lstm_layers,n_hidden_size,lookahead):
+    def __init__(self,n_features,n_lookback,n_lstm_layers,n_hidden_size):
         super(LSTMForecast,self).__init__()
         self.n_features = n_features
         self.lookback = n_lookback
         self.n_lstm_layers = n_lstm_layers
         self.n_hidden_size = n_hidden_size
-        self.lookahead = lookahead
-        self.fcnn_in_size = self.n_hidden_size
+        self.fcnn_in_size = self.n_hidden_size*self.lookback
         
         # LSTM
         self.lstm_model = nn.LSTM(input_size=n_features,hidden_size=n_hidden_size,num_layers=n_lstm_layers,batch_first=True,bidirectional=False)
@@ -18,16 +17,10 @@ class LSTMForecast(nn.Module):
         # FCNN 
         self.FCLayer1 = nn.Linear(self.fcnn_in_size,self.fcnn_in_size//2)
         self.FCLayer2 = nn.Linear(self.fcnn_in_size//2,self.fcnn_in_size//4)
-        self.FCLayer3 = nn.Linear(self.fcnn_in_size//4,self.fcnn_in_size//1)
+        self.FCLayer3 = nn.Linear(self.fcnn_in_size//4,1)
         self.prelu1 = nn.PReLU(self.fcnn_in_size//2)
         self.prelu2 = nn.PReLU(self.fcnn_in_size//4)
         
-        # Interpolator
-        self.interp = nn.Sequential(
-            nn.Linear(self.hidden_size,self.hidden_size//2),
-            nn.PReLU(num_params=self.hidden_size//2),
-            nn.Linear(self.hidden_size//2,self.n_features)
-        )       
         
     def forward(self,x):
         
@@ -36,22 +29,14 @@ class LSTMForecast(nn.Module):
             if len(x.shape) != 3:
                 raise ValueError('Only accepting batched input!')
             
-        # extend x along specifc dimension with zeros
-        x = torch.cat([x,torch.zeros(x.size(0),self.lookahead,x.size(2)).to(x.device)],dim=1)
-            
         # initialize output and cell state
         ht,ct = self._init_hidden(x.shape,x.device)
         
         # get output of LSTM
-        for t in range(self.lookahead+self.lookback):
-            if t < self.lookback:
-                _, (ht,ct) = self.lstm_model(x[:,[t],:],(ht,ct))
-            else:
-                inp = self.interp(ht[-1,:,:]).unsqueeze(dim=1)
-                _, (ht,ct) = self.lstm_model(inp,(ht,ct))
+        x, (ht,ct) = self.lstm_model(x,(ht.detach(),ct.detach()))
         
         # pass through fully connected layers
-        return self._forward_fcnn(ht[-1,:,:])
+        return self._forward_fcnn(torch.cat(x.unbind(dim=1),dim=1))
     
     def _init_hidden(self,shape,device):
         

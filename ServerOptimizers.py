@@ -44,7 +44,7 @@ class FedAvgAdaptive:
         
     def init_states(self):
         self.x = [me.get_flattened_params() for me in self.mes]
-        self.client_vars = [np.ones((self.update_size,)) for _ in range(self.n_clients)]
+        self.client_vars = [np.ones((self.num_params,)) for _ in range(self.n_clients)]
         
     def aggregate_and_update(self, grads=None):
         for idx in range(len(self.client_vars)):
@@ -79,8 +79,8 @@ class FedAdagrad:
         
     def init_states(self):
         self.x = self.me.get_flattened_params()
-        self.m = np.zeros(self.update_size)
-        self.v = np.ones(self.update_size)
+        self.m = np.zeros(self.num_params)
+        self.v = np.ones(self.num_params)
         
     def aggregate_and_update(self, grads=None):
         if self.weights is None:
@@ -108,8 +108,8 @@ class FedYogi:
         
     def init_states(self):
         self.x = self.me.get_flattened_params()
-        self.m = np.zeros(self.update_size)
-        self.v = np.ones(self.update_size)
+        self.m = np.zeros(self.num_params)
+        self.v = np.ones(self.num_params)
         
     def aggregate_and_update(self, grads=None):
         if self.weights is None:
@@ -137,8 +137,8 @@ class FedAdam:
         
     def init_states(self):
         self.x = self.me.get_flattened_params()
-        self.m = np.zeros(self.update_size)
-        self.v = np.ones(self.update_size)
+        self.m = np.zeros(self.num_params)
+        self.v = np.ones(self.num_params)
         
     def aggregate_and_update(self, grads=None):
         if self.weights is None:
@@ -152,15 +152,15 @@ class FedAdam:
         
 # class FedProxServer(GradientAggregator):
     
-#     def __init__(self,n_clients=2,update_size=100,lr=1e-3,weights = None):
-#         super().__init__(n_clients,update_size)
+#     def __init__(self,n_clients=2,num_params=100,lr=1e-3,weights = None):
+#         super().__init__(n_clients,num_params)
 #         self.lr = lr
 #         self.weights = weights
 #         self.init_states()
         
 #     def init_states(self):
-#         self.lam = np.zeros(self.update_size)
-#         self.x = np.zeros(self.update_size)
+#         self.lam = np.zeros(self.num_params)
+#         self.x = np.zeros(self.num_params)
         
 #     def aggregate_and_update(self, grads=None):
 #         if self.weights is None:
