@@ -3,23 +3,22 @@ import torch.nn as nn
 
 class LSTMForecast(nn.Module):
     
-    def __init__(self,n_features,n_lookback,n_lstm_layers,n_hidden_size):
+    def __init__(self,n_features,n_lookback,n_lstm_layers,n_hidden_size,lookahead):
         super(LSTMForecast,self).__init__()
         self.n_features = n_features
         self.lookback = n_lookback
         self.n_lstm_layers = n_lstm_layers
         self.n_hidden_size = n_hidden_size
-        self.fcnn_in_size = self.n_hidden_size*self.lookback
+        self.lookahead = lookahead
+        self.fcnn_in_size = self.n_hidden_size*(self.lookback+self.lookahead)
         
         # LSTM
         self.lstm_model = nn.LSTM(input_size=n_features,hidden_size=n_hidden_size,num_layers=n_lstm_layers,batch_first=True,bidirectional=False)
         
         # FCNN 
         self.FCLayer1 = nn.Linear(self.fcnn_in_size,self.fcnn_in_size//2)
-        self.FCLayer2 = nn.Linear(self.fcnn_in_size//2,self.fcnn_in_size//4)
-        self.FCLayer3 = nn.Linear(self.fcnn_in_size//4,1)
+        self.FCLayer2 = nn.Linear(self.fcnn_in_size//2,1)
         self.prelu1 = nn.PReLU(self.fcnn_in_size//2)
-        self.prelu2 = nn.PReLU(self.fcnn_in_size//4)
         
         
     def forward(self,x):
@@ -28,6 +27,9 @@ class LSTMForecast(nn.Module):
         if self.n_features > 1:
             if len(x.shape) != 3:
                 raise ValueError('Only accepting batched input!')
+            
+        # extend x along specifc dimension with zeros
+        x = torch.cat([x,torch.zeros(x.size(0),self.lookahead,x.size(2)).to(x.device)],dim=1)
             
         # initialize output and cell state
         ht,ct = self._init_hidden(x.shape,x.device)

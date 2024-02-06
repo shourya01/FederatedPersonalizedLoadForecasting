@@ -7,7 +7,7 @@ class FedAvg:
     
     def __init__(self,model:nn.Module,n_clients=2,lr=1e-3,weights = None):
         self.me = ModelExtractor(model=model,pers_layers=[])
-        self.n_client = n_clients
+        self.n_clients = n_clients
         self.num_params = self.me.num_params
         self.lr = lr
         self.weights = weights
@@ -31,7 +31,7 @@ class FedAvgAdaptive:
     def __init__(self,model:list,n_clients=2,lr=1e-3,beta = 0.9,eps = 1e-8,q=5,weights = None):
         assert len(model) == n_clients, "Different num of model than clients!"
         self.mes = [ModelExtractor(model=modelItm,pers_layers=[]) for modelItm in model]
-        self.n_client = n_clients
+        self.n_clients = n_clients
         self.num_params = self.mes[0].num_params
         self.lr = lr
         self.beta = beta
@@ -68,7 +68,7 @@ class FedAdagrad:
     
     def __init__(self,model:nn.Module,n_clients=2,lr=1e-3,beta_1 = 0.9, eps = 1e-8,weights = None):
         self.me = ModelExtractor(model=model,pers_layers=[])
-        self.n_client = n_clients
+        self.n_clients = n_clients
         self.num_params = self.me.num_params
         self.lr = lr
         self.beta_1 = beta_1
@@ -96,7 +96,7 @@ class FedYogi:
     
     def __init__(self,model:nn.Module,n_clients=2,lr=1e-3,beta_1 = 0.9,beta_2 = 0.999, eps = 1e-8,weights = None):
         self.me = ModelExtractor(model=model,pers_layers=[])
-        self.n_client = n_clients
+        self.n_clients = n_clients
         self.num_params = self.me.num_params
         self.lr = lr
         self.beta_1 = beta_1
@@ -125,7 +125,7 @@ class FedAdam:
     
     def __init__(self,model:nn.Module,n_clients=2,lr=1e-3,beta_1 = 0.9,beta_2 = 0.999, eps = 1e-8,weights = None):
         self.me = ModelExtractor(model=model,pers_layers=[])
-        self.n_client = n_clients
+        self.n_clients = n_clients
         self.num_params = self.me.num_params
         self.lr = lr
         self.beta_1 = beta_1

@@ -31,6 +31,7 @@ class CData:
         self.lookahead = 4
         self.batch_size = 64
         self.lr = 5e-4
+        self.server_lr = 1e-2
         self.beta = 0.9
         self.beta_1 = 0.9
         self.beta_2 = 0.99
@@ -129,7 +130,7 @@ if __name__=="__main__":
                 device = f'cuda:{idx}'
     
     # model config
-    model_kw = {'n_features':cData.n_features,'n_lookback':cData.seq_len,'n_lstm_layers':cData.n_lstm_layers,'n_hidden_size':cData.net_hidden_size}
+    model_kw = {'n_features':cData.n_features,'n_lookback':cData.seq_len,'n_lstm_layers':cData.n_lstm_layers,'n_hidden_size':cData.net_hidden_size,'lookahead':cData.lookahead}
     dummyModel = LSTMForecast(**model_kw) # for extracting layer data
     
     # local optim partial config
@@ -141,11 +142,11 @@ if __name__=="__main__":
     localOptKw = [prox_kw,proxadam_kw,adam_kw,adamams_kw]
     
     # global optim partial config
-    fedavg_kw = {'lr':cData.lr,'weights':None}
-    fedavgadaptive_kw = {'lr':cData.lr,'beta':cData.beta,'eps':cData.eps,'q':5,'weights':None}
-    fedadagrad_kw = {'lr':cData.lr,'beta_1':cData.beta_1,'eps':cData.eps,'weights':None}
-    fedyogi_kw = {'lr':cData.lr,'beta_1':cData.beta_1,'beta_2':cData.beta_2,'eps':cData.eps,'weights':None}
-    fedadam_kw = {'lr':cData.lr,'beta_1':cData.beta_1,'beta_2':cData.beta_2,'eps':cData.eps,'weights':None}
+    fedavg_kw = {'lr':cData.server_lr,'weights':None}
+    fedavgadaptive_kw = {'lr':cData.server_lr,'beta':cData.beta,'eps':cData.eps,'q':5,'weights':None}
+    fedadagrad_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1,'eps':cData.eps,'weights':None}
+    fedyogi_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1,'beta_2':cData.beta_2,'eps':cData.eps,'weights':None}
+    fedadam_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1,'beta_2':cData.beta_2,'eps':cData.eps,'weights':None}
     globalOptNames = [FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam]
     globalOptKw = [fedavg_kw,fedavgadaptive_kw,fedadagrad_kw,fedyogi_kw,fedadam_kw]
     
