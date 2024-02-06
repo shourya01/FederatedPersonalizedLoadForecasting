@@ -194,7 +194,7 @@ if __name__=="__main__":
             # global_sum = np.zeros_like(errMat,dtype=np.float64)
             # comm.Reduce([errMat,MPI.DOUBLE],[global_sum,MPI.DOUBLE],op=MPI.SUM,root=0)
             # errMat = global_sum
-            plt.imshow(errMat, cmap='viridis', alpha = 0.5, extent=[0, errMat.shape[1], 0, errMat.shape[0]])
+            plt.imshow(errMat, origin='lower', cmap='viridis', alpha = 0.5, extent=[0, errMat.shape[1], 0, errMat.shape[0]])
             plt.xticks([0.5+i for i in range(len(globalOptNames))],[itm.__name__ for itm in globalOptNames],rotation=90)
             plt.yticks([0.5+i for i in range(len(localOptNames))],[itm.__name__ for itm in localOptNames])
             for i in range(errMat.shape[0]):

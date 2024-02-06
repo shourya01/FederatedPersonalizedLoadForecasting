@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from utils import ModelExtractor, GradientAggregator
+from utils import ModelExtractor
 
-class FedAvg(GradientAggregator):
+class FedAvg:
     
     def __init__(self,model:nn.Module,n_clients=2,lr=1e-3,weights = None):
         self.me = ModelExtractor(model=model,pers_layers=[])
-        super().__init__(n_clients,self.me.num_params)
+        self.n_client = n_clients
+        self.num_params = self.me.num_params
         self.lr = lr
         self.weights = weights
         self.model = model
@@ -25,12 +26,13 @@ class FedAvg(GradientAggregator):
         self.x += self.lr*np.mean(grads,axis=0)
         self.me.set_flattened_params_all(self.x)
         
-class FedAvgAdaptive(GradientAggregator):
+class FedAvgAdaptive:
     
     def __init__(self,model:list,n_clients=2,lr=1e-3,beta = 0.9,eps = 1e-8,q=5,weights = None):
         assert len(model) == n_clients, "Different num of model than clients!"
         self.mes = [ModelExtractor(model=modelItm,pers_layers=[]) for modelItm in model]
-        super().__init__(n_clients,self.mes[0].num_params)
+        self.n_client = n_clients
+        self.num_params = self.mes[0].num_params
         self.lr = lr
         self.beta = beta
         self.eps = eps
@@ -62,11 +64,12 @@ class FedAvgAdaptive(GradientAggregator):
         self.update_count += 1
         
         
-class FedAdagrad(GradientAggregator):
+class FedAdagrad:
     
     def __init__(self,model:nn.Module,n_clients=2,lr=1e-3,beta_1 = 0.9, eps = 1e-8,weights = None):
         self.me = ModelExtractor(model=model,pers_layers=[])
-        super().__init__(n_clients,self.me.num_params)
+        self.n_client = n_clients
+        self.num_params = self.me.num_params
         self.lr = lr
         self.beta_1 = beta_1
         self.eps = eps
@@ -89,11 +92,12 @@ class FedAdagrad(GradientAggregator):
         self.x += self.lr*self.m/(np.sqrt(self.v)+self.eps)
         self.me.set_flattened_params_all(self.x)
         
-class FedYogi(GradientAggregator):
+class FedYogi:
     
     def __init__(self,model:nn.Module,n_clients=2,lr=1e-3,beta_1 = 0.9,beta_2 = 0.999, eps = 1e-8,weights = None):
         self.me = ModelExtractor(model=model,pers_layers=[])
-        super().__init__(n_clients,self.me.num_params)
+        self.n_client = n_clients
+        self.num_params = self.me.num_params
         self.lr = lr
         self.beta_1 = beta_1
         self.beta_2 = beta_2
@@ -117,11 +121,12 @@ class FedYogi(GradientAggregator):
         self.x += self.lr*self.m/(np.sqrt(self.v)+self.eps)
         self.me.set_flattened_params_all(self.x)
         
-class FedAdam(GradientAggregator):
+class FedAdam:
     
     def __init__(self,model:nn.Module,n_clients=2,lr=1e-3,beta_1 = 0.9,beta_2 = 0.999, eps = 1e-8,weights = None):
         self.me = ModelExtractor(model=model,pers_layers=[])
-        super().__init__(n_clients,self.me.num_params)
+        self.n_client = n_clients
+        self.num_params = self.me.num_params
         self.lr = lr
         self.beta_1 = beta_1
         self.beta_2 = beta_2

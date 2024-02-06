@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from utils import ModelExtractor, GradientAggregator
+from utils import ModelExtractor
 
 class Prox:
     
@@ -11,13 +11,12 @@ class Prox:
         
         self.model = model
         self.me = ModelExtractor(self.model,p_layers)
-        self.update_count = 1
         self.lr = lr
         self.weight_decay = weight_decay
         
         # number of params in model
         nparams = 0
-        for k,v in self.model.named_parameters():
+        for _,v in self.model.named_parameters():
             nparams += torch.numel(v)
         self.nparams = nparams
         
@@ -35,7 +34,7 @@ class Prox:
             grad_collector.append(m.grad.flatten())
         grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()
         self.x -= self.lr*( grad + self.weight_decay*(self.x-target_params) )
-        self.me.set_flattened_params_pers(self.x)
+        self.me.set_flattened_params_shared(self.x)
         
 class ProxAdam:
     
@@ -49,7 +48,7 @@ class ProxAdam:
         
         # number of params in model
         nparams = 0
-        for k,v in self.model.named_parameters():
+        for _,v in self.model.named_parameters():
             nparams += torch.numel(v)
         self.nparams = nparams
         
@@ -73,7 +72,7 @@ class ProxAdam:
         
         # assuming here that the .grad params are populated
         grad_collector = []
-        for m in self.model.parameters():
+        for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
@@ -81,7 +80,8 @@ class ProxAdam:
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))
         self.vhat = self.v / (1-np.power(self.beta_2,self.update_count))
         self.x -= self.lr*self.mhat / (np.sqrt(self.vhat) + self.eps)
-        self.me.set_flattened_params_pers(self.x)
+        self.me.set_flattened_params_shared(self.x)
+        self.update_count += 1
 
 class Adam:
     
@@ -100,7 +100,7 @@ class Adam:
         
         # number of params in model
         nparams = 0
-        for k,v in self.model.named_parameters():
+        for _,v in self.model.named_parameters():
             nparams += torch.numel(v)
         self.nparams = nparams
         
@@ -118,7 +118,7 @@ class Adam:
         
         # assuming here that the .grad params are populated
         grad_collector = []
-        for m in self.model.parameters():
+        for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
@@ -126,7 +126,8 @@ class Adam:
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))
         self.vhat = self.v / (1-np.power(self.beta_2,self.update_count))
         self.x -= self.lr*self.mhat / (np.sqrt(self.vhat) + self.eps)
-        self.me.set_flattened_params_pers(self.x)
+        self.me.set_flattened_params_shared(self.x)
+        self.update_count += 1
         
         
 class AdamAMS:
@@ -146,7 +147,7 @@ class AdamAMS:
         
         # number of params in model
         nparams = 0
-        for k,v in self.model.named_parameters():
+        for _,v in self.model.named_parameters():
             nparams += torch.numel(v)
         self.nparams = nparams
         
@@ -165,7 +166,7 @@ class AdamAMS:
         
         # assuming here that the .grad params are populated
         grad_collector = []
-        for m in self.model.parameters():
+        for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
@@ -174,4 +175,5 @@ class AdamAMS:
         self.vhat = self.v / (1-np.power(self.beta_2,self.update_count))
         self.vhatmax = np.maximum(self.vhat,self.vhatmax)
         self.x -= self.lr*self.mhat / (np.sqrt(self.vhatmax) + self.eps)
-        self.me.set_flattened_params_pers(self.x)
+        self.me.set_flattened_params_shared(self.x)
+        self.update_count += 1

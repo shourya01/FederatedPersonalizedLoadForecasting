@@ -36,7 +36,7 @@ class ModelExtractor:
             cnt += torch.numel(sd[k])
         self.model.load_state_dict(sd)
         
-    def set_flattened_params_pers(self,fparams):
+    def set_flattened_params_shared(self,fparams):
         
         cnt, sd = 0, self.model.state_dict().copy()
         for k,_ in self.model.named_parameters():
@@ -131,26 +131,6 @@ class DatasetCleaner:
     def get_test_dset(self):
         
         return self.test_in, self.test_out, self.test_persistence
-        
-        
-class GradientAggregator:
-    
-    # base class for server
-    
-    def __init__(self,n_clients,update_size):
-        
-        self.n_clients = n_clients
-        self.update_size = update_size
-        
-        self.init_states()
-        
-    def init_states(self):
-        # not implemented
-        pass
-    
-    def aggregate_and_update(self,grads=None):
-        # not implemented 
-        pass
     
 def set_seed(seed=233):
     
