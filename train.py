@@ -152,7 +152,7 @@ if __name__=="__main__":
     
     # personalization levels
     pers0 = [] # all shared
-    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias','prelu1.weight','prelu2.weight'] # linear head personalized
+    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','prelu1.weight'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
     pLayers = [pers0,pers1,pers2]
     pLayerNames = ['allShared','linearHeadPersonalized','allPersonalized']
