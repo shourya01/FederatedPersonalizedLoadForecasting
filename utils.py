@@ -115,7 +115,7 @@ class DatasetCleaner:
         for tidx in range(self.dset_test[cidxNew,:,:].shape[0]-self.seq_len-self.lookahead):
             inp.append(self.dset_test[cidxNew,tidx:tidx+self.seq_len,:])
             out.append(self.dset_test_unscaled[cidxNew,tidx+self.seq_len+self.lookahead,[0]])
-            persistence.append(self.dset_test_unscaled[cidxNew,tidx+self.seq_len,[0]])
+            persistence.append(self.dset_test_unscaled[cidxNew,tidx+self.seq_len-1,[0]])
         self.test_in, self.test_out = torch.tensor(np.array(inp)).to(self.dtype).to(self.device), torch.tensor(np.array(out)).to(self.dtype).to(self.device)
         self.test_persistence = torch.tensor(np.array(persistence)).to(self.dtype).to(self.device)
         
