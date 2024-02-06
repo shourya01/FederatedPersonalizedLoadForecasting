@@ -1,6 +1,6 @@
 #!/bin/bash -l
-#SBATCH --job-name=HETERONY
-#SBATCH --output=HNY.log
+#SBATCH --job-name=HETEROIL
+#SBATCH --output=HIL.log
 #SBATCH --account=NEXTGENOPT    
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:4
@@ -15,7 +15,7 @@ nvidia-smi
 cd ~/FederatedPersonalizedLoadForecasting
 
 export ENVN="APPFLENV"
-export STATE="NY"
+export STATE="IL"
 
 module load anaconda3
 source activate $ENVN

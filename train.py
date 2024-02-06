@@ -88,7 +88,7 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
             buf = np.empty(localOpt.me.num_params,dtype=np.float64)
             comm.Recv([buf,MPI.DOUBLE],source=0,tag=0)
             if local_name in ['Adam','AdamAMS']:
-                localOpt.me.set_flattened_params_pers(buf)
+                localOpt.me.set_flattened_params_shared(buf)
             before_update = localOpt.me.get_flattened_params()
             for e_local in range(cData.local_epochs):
                 input, label = dset.sample_train(cData.batch_size)
