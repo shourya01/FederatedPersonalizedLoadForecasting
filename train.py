@@ -40,11 +40,11 @@ class CData:
         self.state = args.state
         self.train_test_split = 0.8
         self.local_epochs = 100
-        self.global_epochs = 100
+        self.global_epochs = 2
         self.net_hidden_size = 25
         self.n_lstm_layers = 2
         self.weight_decay = 1e-1
-        self.test_every = 5
+        self.test_every = 1
         self.save_at_end = True
         
 def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
@@ -184,6 +184,7 @@ if __name__=="__main__":
                         comm.Recv([buf,MPI.FLOAT],source=cidx+1)
                         cur_error += (1/(comm.Get_size()-1))*buf
                 errMat[li,gi] = cur_error
+                comm.Barrier()
                 
                 # # send err matrix
                 # global_sum = np.zeros_like(errMat,dtype=np.float64)
