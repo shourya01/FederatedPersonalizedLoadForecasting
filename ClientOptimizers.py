@@ -26,6 +26,10 @@ class Prox:
         
         self.x = self.me.get_flattened_params()
         
+    def reset_counter(self):
+        
+        pass
+        
     def update(self,target_params:np.ndarray):
         
         # assuming here that the .grad params are populated
@@ -67,6 +71,10 @@ class ProxAdam:
         self.v = np.ones(self.nparams)
         self.mhat = np.zeros(self.nparams)
         self.vhat = np.zeros(self.nparams)
+        
+    def reset_counter(self):
+        
+        self.update_count += 1
         
     def update(self,target_params:np.ndarray):
         
@@ -113,6 +121,10 @@ class Adam:
         self.v = np.ones(self.nparams)
         self.mhat = np.zeros(self.nparams)
         self.vhat = np.zeros(self.nparams)
+        
+    def reset_counter(self):
+        
+        self.update_count += 1
         
     def update(self):
         
@@ -161,6 +173,10 @@ class AdamAMS:
         self.mhat = np.zeros(self.nparams)
         self.vhat = np.zeros(self.nparams)
         self.vhatmax = (self.eps)*np.ones(self.nparams)
+        
+    def reset_counter(self):
+        
+        self.update_count += 1
         
     def update(self):
         

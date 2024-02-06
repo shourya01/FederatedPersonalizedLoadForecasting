@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-from copy import deepcopy
 from models import LSTMForecast
 from mpi4py import MPI
 import os
@@ -39,12 +38,12 @@ class CData:
         self.n_clients = 12
         self.state = args.state
         self.train_test_split = 0.8
-        self.local_epochs = 100
-        self.global_epochs = 100
+        self.local_epochs = 10
+        self.global_epochs = 2
         self.net_hidden_size = 25
         self.n_lstm_layers = 2
         self.weight_decay = 1e-1
-        self.test_every = 5
+        self.test_every = 1
         self.save_at_end = True
         
 def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
@@ -92,6 +91,7 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
                 localOpt.me.set_flattened_params_shared(buf)
             before_update = localOpt.me.get_flattened_params()
             for e_local in range(cData.local_epochs):
+                localOpt.reset_counter()
                 input, label = dset.sample_train(cData.batch_size)
                 loss = MSELoss(model(input), label)
                 localOpt.me.unset_param_grad() # zero out gradient fields
