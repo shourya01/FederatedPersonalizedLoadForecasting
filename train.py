@@ -204,5 +204,5 @@ if __name__=="__main__":
                 f'{pn}',f'{cData.state}',f'\n',f'{cData.local_epochs}',f'{cData.global_epochs}',f'\n',f'{cData.seq_len}',f'{cData.lookahead}',f'\n',f'{comm.Get_size()-1}',f'{cData.batch_size}'
             ))
             plt.colorbar()
-            plt.savefig(os.getcwd()+f'/experiments/errMat{pn}.pdf',format='pdf',bbox_inches='tight') 
+            plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat{pn}.pdf',format='pdf',bbox_inches='tight') 
             plt.close()
