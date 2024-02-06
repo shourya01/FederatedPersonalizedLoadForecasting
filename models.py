@@ -17,9 +17,17 @@ class LSTMForecast(nn.Module):
         
         # FCNN 
         self.FCLayer1 = nn.Linear(self.fcnn_in_size,self.fcnn_in_size//2)
-        self.FCLayer2 = nn.Linear(self.fcnn_in_size//2,1)
+        self.FCLayer2 = nn.Linear(self.fcnn_in_size//2,self.fcnn_in_size//4)
+        self.FCLayer3 = nn.Linear(self.fcnn_in_size//4,self.fcnn_in_size//1)
         self.prelu1 = nn.PReLU(self.fcnn_in_size//2)
+        self.prelu2 = nn.PReLU(self.fcnn_in_size//4)
         
+        # Interpolator
+        self.interp = nn.Sequential(
+            nn.Linear(self.hidden_size,self.hidden_size//2),
+            nn.PReLU(num_params=self.hidden_size//2),
+            nn.Linear(self.hidden_size//2,self.n_features)
+        )       
         
     def forward(self,x):
         
@@ -36,7 +44,11 @@ class LSTMForecast(nn.Module):
         
         # get output of LSTM
         for t in range(self.lookahead+self.lookback):
-            _, (ht,ct) = self.lstm_model(x[:,[t],:],(ht,ct))
+            if t < self.lookback:
+                _, (ht,ct) = self.lstm_model(x[:,[t],:],(ht,ct))
+            else:
+                inp = self.interp(ht[-1,:,:]).unsqueeze(dim=1)
+                _, (ht,ct) = self.lstm_model(inp,(ht,ct))
         
         # pass through fully connected layers
         return self._forward_fcnn(ht[-1,:,:])
@@ -56,6 +68,8 @@ class LSTMForecast(nn.Module):
         x = self.FCLayer1(x)
         x = self.prelu1(x)
         x = self.FCLayer2(x)
+        x = self.prelu2(x)
+        x = self.FCLayer3(x)
         
         # rake absolute value of output to ensure non-negativity
         return x.abs()
