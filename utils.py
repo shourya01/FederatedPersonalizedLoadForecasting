@@ -26,13 +26,13 @@ class ModelExtractor:
         for _,v in self.model.named_parameters():
            paramvals.append(v.detach().flatten().cpu().numpy())
            
-        return np.concatenate(paramvals)
+        return np.concatenate(paramvals,axis=0)
     
     def set_flattened_params_all(self,fparams):
         
         cnt, sd = 0, self.model.state_dict().copy()
         for k,v in self.model.named_parameters():
-            v = torch.tensor(fparams[cnt:cnt+torch.numel(v)]).reshape(v.shape).to(sd[k].dtype)
+            sd[k] = torch.tensor(fparams[cnt:cnt+torch.numel(v)]).reshape(v.shape).to(sd[k].dtype)
             cnt += torch.numel(sd[k])
         self.model.load_state_dict(sd)
         
