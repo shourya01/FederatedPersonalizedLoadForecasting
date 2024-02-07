@@ -10,6 +10,7 @@ class Prox:
     def __init__(self,model=nn.Module,p_layers=[],lr=1e-3,weight_decay=1e-1):
         
         self.model = model
+        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
         self.me = ModelExtractor(self.model,p_layers)
         self.lr = lr
         self.weight_decay = weight_decay
@@ -32,6 +33,10 @@ class Prox:
         
     def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean')):
         
+        # populate .grad
+        self.optim.zero_grad()
+        lossfn(self.model(inp),tar).backward()
+        
         # assuming here that the .grad params are populated
         grad_collector = []
         for _,m in self.model.named_parameters():
@@ -47,6 +52,7 @@ class ProxAdam:
     def __init__(self,model=nn.Module,p_layers=[],lr=1e-3,beta_1=0.9,beta_2=0.999,eps=1e-8,weight_decay=1e-8):
         
         self.model = model
+        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
         self.me = ModelExtractor(self.model,p_layers)
         self.update_count = 1
         
@@ -78,6 +84,11 @@ class ProxAdam:
         
     def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean')):
         
+        # populate .grad
+        self.optim.zero_grad()
+        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
+        lossfn(self.model(inp),tar).backward()
+        
         # assuming here that the .grad params are populated
         grad_collector = []
         for _,m in self.model.named_parameters():
@@ -98,6 +109,7 @@ class Adam:
     def __init__(self,model=nn.Module,p_layers=[],lr=1e-3,beta_1=0.9,beta_2=0.999,eps=1e-8):
         
         self.model = model
+        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
         self.me = ModelExtractor(self.model,p_layers)
         self.update_count = 1
         
@@ -128,6 +140,10 @@ class Adam:
         
     def update(self,inp,tar,lossfn=nn.MSELoss(reduction='mean')):
         
+        # populate .grad
+        self.optim.zero_grad()
+        lossfn(self.model(inp),tar).backward()
+        
         # assuming here that the .grad params are populated
         grad_collector = []
         for _,m in self.model.named_parameters():
@@ -149,6 +165,7 @@ class AdamAMS:
     def __init__(self,model=nn.Module,p_layers=[],lr=1e-3,beta_1=0.9,beta_2=0.999,eps=1e-8):
         
         self.model = model
+        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
         self.me = ModelExtractor(self.model,p_layers)
         self.update_count = 1
         
@@ -178,7 +195,11 @@ class AdamAMS:
         
         self.update_count += 1
         
-    def update(self,inp,tar):
+    def update(self,inp,tar,lossfn=nn.MSELoss(reduction='mean')):
+        
+        # populate .grad
+        self.optim.zero_grad()
+        lossfn(self.model(inp),tar).backward()
         
         # assuming here that the .grad params are populated
         grad_collector = []

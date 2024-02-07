@@ -43,10 +43,11 @@ class ModelExtractor:
         cnt, sd = 0, self.model.state_dict().copy()
         for k,v in self.model.named_parameters():
             if k in self.pers_layers:
+                cnt += torch.numel(sd[k])
                 del sd[k]
             else:
                 sd[k] = torch.tensor(fparams[cnt:cnt+torch.numel(v)]).reshape(v.shape).to(sd[k].dtype)
-            cnt += torch.numel(sd[k])
+                cnt += torch.numel(sd[k])
         self.model.load_state_dict(sd,strict=False)
         
     def unset_param_grad(self):

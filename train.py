@@ -7,6 +7,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from models import LSTMForecast
 from mpi4py import MPI
 import os, shutil, argparse, warnings
+from datetime import datetime
 warnings.filterwarnings("ignore", category=UserWarning)
 if shutil.which('latex'):
     mpl.rcParams["text.usetex"] = True
@@ -21,6 +22,7 @@ from utils import DatasetCleaner, ModelExtractor, set_seed
 #args
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--state',type=str,default='CA')
+parser.add_argument('--choice_local',type=int,choices = [0,1,2,3])
 args = parser.parse_args()
  
 # we use convention that the update should be 'added' to states
@@ -46,11 +48,11 @@ class CData:
         self.state = args.state
         self.train_test_split = 0.8
         self.local_epochs = 100
-        self.global_epochs = 120
+        self.global_epochs = 100
         self.net_hidden_size = 30
         self.n_lstm_layers = 2
         self.weight_decay = 1e-1
-        self.test_every = 20
+        self.test_every = 100
         self.save_at_end = True
         
 def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
@@ -65,13 +67,7 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
     
     if rank == 0:
         # server
-        if global_name == 'FedAvgAdaptive':
-            model = [LSTMForecast(**model_kw).to(device) for _ in range(total_clients)] # server's aggregate model
-            for m in model:
-                m.lstm_model.flatten_parameters()
-        else:
-            model = LSTMForecast(**model_kw).to(device) # server's aggregate model
-            model.lstm_model.flatten_parameters()
+        model = LSTMForecast(**model_kw).to(device) if global_name!='FedAvgAdaptive' else [LSTMForecast(**model_kw).to(device) for _ in range(total_clients)]# server's aggregate model
         globalOpt = global_opt(model=model,n_clients=total_clients,**global_kw)
         for e_global in range(cData.global_epochs):
             for cidx in range(total_clients):
@@ -94,7 +90,6 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
         dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=client_id,clientList=[3*i for i in range(comm.Get_size()-1)],seq_len=cData.seq_len,
                 lookahead=cData.lookahead,train_test_split=cData.train_test_split,device=device)
         model = LSTMForecast(**model_kw).to(device) # client's local model
-        model.lstm_model.flatten_parameters()
         localOpt = local_opt(model=model,p_layers=p_layers,**local_kw)
         mase_test = []
         for e_global in range(cData.global_epochs):
@@ -103,18 +98,16 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
             if local_name in ['Adam','AdamAMS']:
                 localOpt.me.set_flattened_params_shared(buf)
             before_update = localOpt.me.get_flattened_params()
-            for e_local in range(cData.local_epochs):
+            if p_name != 'All layers personalized':
                 localOpt.reset_counter()
+            for e_local in range(cData.local_epochs):
                 input, label = dset.sample_train(cData.batch_size)
-                loss = MSELoss(model(input), label)
-                localOpt.me.unset_param_grad() # zero out gradient fields
-                torch.mean(loss).backward() # do a backward call
                 if local_name in ['Prox','ProxAdam']:
-                    localOpt.update(buf)
+                    localOpt.update(input,label,buf)
                 else:
-                    localOpt.update()
+                    localOpt.update(input,label)
             comm.Send([(localOpt.me.get_flattened_params()-before_update).astype(np.float64),MPI.DOUBLE],dest=0,tag=0)
-            if e_global % cData.test_every == 0:
+            if e_global % cData.test_every == 0 or e_global == cData.global_epochs-1:
                 mase = lambda y,x,p: np.mean(np.abs(x - y)) / np.mean(np.abs(x - p))
                 test_in, test_out, test_persistence = dset.get_test_dset()
                 loss_val = mase(model(test_in).detach().cpu().flatten().numpy()*(dset.pmax-dset.pmin)+dset.pmin,test_out.cpu().flatten().numpy(),test_persistence.cpu().flatten().numpy()).item()
@@ -153,6 +146,8 @@ if __name__=="__main__":
     adamams_kw = {'lr':cData.lr,'beta_1':cData.beta_1,'beta_2':cData.beta_2,'eps':cData.eps}
     localOptNames = [Prox,ProxAdam,Adam,AdamAMS]
     localOptKw = [prox_kw,proxadam_kw,adam_kw,adamams_kw]
+    localOptNames = [localOptNames[args.choice_local]]
+    localOptKw = [localOptKw[args.choice_local]]
     
     # global optim partial config
     fedavg_kw = {'lr':cData.server_lr,'weights':None}
@@ -178,6 +173,7 @@ if __name__=="__main__":
                 errors, me = learn_model(comm,cData,lk,lo,lo.__name__,gk,go,go.__name__,model_kw,pl,pn,device)
                 if cData.save_at_end:
                     topdir = os.getcwd()+f"/experiments{cData.state}/{pn}_{go.__name__}_{lo.__name__}/{'server' if comm.Get_rank()==0 else f'client{comm.Get_rank()-1}'}"
+                    expath = os.getcwd()+f"/experiments{cData.state}"
                     if not os.path.exists(topdir):
                         os.makedirs(topdir)
                     torch.save(me.model.state_dict(),topdir+'/model.pth')
@@ -196,23 +192,25 @@ if __name__=="__main__":
                         buf = np.empty(1,dtype=np.float32)
                         comm.Recv([buf,MPI.FLOAT],source=cidx+1)
                         cur_error += (1/(comm.Get_size()-1))*buf.item()
-                errMat[li,gi] = cur_error
-                
+                errMat[li,gi] = cur_error 
 
         if comm.Get_rank() == 0:
-            plt.imshow(errMat, origin='lower', cmap='viridis', alpha = 0.5, extent=[0, errMat.shape[1], 0, errMat.shape[0]])
-            plt.xticks([0.5+i for i in range(len(globalOptNames))],[itm.__name__ for itm in globalOptNames],rotation=90)
-            plt.yticks([0.5+i for i in range(len(localOptNames))],[itm.__name__ for itm in localOptNames])
-            plt.gca().xaxis.set_minor_locator(MultipleLocator(1))
-            plt.gca().yaxis.set_minor_locator(MultipleLocator(1))
-            for i in range(errMat.shape[0]):
-                for j in range(errMat.shape[1]):
-                    plt.annotate(f"{errMat[i, j]:.4f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
-            states = {'NY':'New York','CA':'California','IL':'Illinois'}
-            plt.title(r"Dataset:$\mathbf{%s}$, Personalization:$\textbf{%s}$%sAverage test MASE across all"%(
-                f'{states[cData.state]}',f'{pn}',f'\n'
-            ))
-            plt.colorbar()
-            plt.grid(which='minor',color='k')
-            plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat{pn}.pdf',format='pdf',bbox_inches='tight') 
-            plt.close()
+            # plt.imshow(errMat, origin='lower', cmap='viridis', alpha = 0.5, extent=[0, errMat.shape[1], 0, errMat.shape[0]])
+            # plt.xticks([0.5+i for i in range(len(globalOptNames))],[itm.__name__ for itm in globalOptNames],rotation=90)
+            # plt.yticks([0.5+i for i in range(len(localOptNames))],[itm.__name__ for itm in localOptNames])
+            # plt.gca().xaxis.set_minor_locator(MultipleLocator(1))
+            # plt.gca().yaxis.set_minor_locator(MultipleLocator(1))
+            # for i in range(errMat.shape[0]):
+            #     for j in range(errMat.shape[1]):
+            #         plt.annotate(f"{errMat[i, j]:.4f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
+            # states = {'NY':'New York','CA':'California','IL':'Illinois'}
+            # plt.title(r"Dataset:$\textbf{%s}$, Personalization:$\textbf{%s}$%sAverage test MASE across all clients"%(
+            #     f'{states[cData.state]}',f'{pn}',f'\n'
+            # ))
+            # plt.colorbar()
+            # plt.grid(which='minor',color='k')
+            # plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat{pn}.pdf',format='pdf',bbox_inches='tight') 
+            # plt.close()
+            with open(expath+'/results.txt',"a") as file:
+                file.write(f"\ndt={str(datetime.now())}\nFor global={[i.__name__ for i in globalOptNames]},\n local={[i.__name__ for i in localOptNames]},\n state={cData.state}, pers={pn} MASES are:\n")
+                file.write(f"{errMat}\n")
