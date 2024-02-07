@@ -116,8 +116,10 @@ class FedYogi:
             grads = np.array(grads)
         else:
             grads = np.array([itm*self.weights[i] for i,itm in enumerate(grads)])
-        self.m = self.beta_1*self.m + (1-self.beta_1)*self.lr*np.mean(grads,axis=0)
-        self.v = self.beta_2*self.v - (1-self.beta_2)*self.lr*np.square(np.mean(grads,axis=0))*np.sign(self.v-np.square(np.mean(grads,axis=0)))
+        meanGrad = np.mean(grads,axis=0)
+        sqGrad = np.square(meanGrad)
+        self.m = self.beta_1*self.m + (1-self.beta_1)*self.lr*meanGrad
+        self.v = self.beta_2*self.v - (1-self.beta_2)*self.lr*sqGrad*np.sign(self.v-sqGrad)
         self.x += self.lr*self.m/(np.sqrt(self.v)+self.eps)
         self.me.set_flattened_params_all(self.x)
         

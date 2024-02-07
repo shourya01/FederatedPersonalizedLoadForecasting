@@ -24,28 +24,30 @@ class ModelExtractor:
         
         paramvals = []
         for _,v in self.model.named_parameters():
-           paramvals.append(v.detach().flatten().cpu().numpy())
+           paramvals.append(v.detach().flatten().cpu().numpy().copy())
            
         return np.concatenate(paramvals)
     
     def set_flattened_params_all(self,fparams):
         
-        cnt, sd = 0, self.model.state_dict().copy()
-        for k,v in self.model.named_parameters():
-            v = torch.tensor(fparams[cnt:cnt+torch.numel(v)]).reshape(v.shape).to(sd[k].dtype)
-            cnt += torch.numel(sd[k])
-        self.model.load_state_dict(sd)
+        assert fparams.shape[0] == self.num_params, "SHAPE MISMATCH"
+        
+        cnt = 0
+        for _,v in self.model.named_parameters():
+            newT = torch.tensor(fparams[cnt:cnt+torch.numel(v.data)]).reshape(v.data.shape).to(v.data.dtype).to(v.data.device)
+            v.data = newT
+            cnt += torch.numel(v.data)
         
     def set_flattened_params_shared(self,fparams):
         
-        cnt, sd = 0, self.model.state_dict().copy()
-        for k,_ in self.model.named_parameters():
-            sd[k] = torch.tensor(fparams[cnt:cnt+torch.numel(sd[k])]).reshape(sd[k].shape).to(sd[k].dtype)
-            cnt += torch.numel(sd[k])
-        for k in self.param_names:
-            if k in self.pers_layers:
-                del sd[k]
-        self.model.load_state_dict(sd,strict=False) 
+        assert fparams.shape[0] == self.num_params, "SHAPE MISMATCH"
+        
+        cnt = 0
+        for k,v in self.model.named_parameters():
+            if k not in self.pers_layers:
+                newT = torch.tensor(fparams[cnt:cnt+torch.numel(v.data)]).reshape(v.data.shape).to(v.data.dtype).to(v.data.device)
+                v.data = newT
+            cnt += torch.numel(v.data)
         
     def unset_param_grad(self):
         
