@@ -1,11 +1,16 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from models import LSTMForecast
 from mpi4py import MPI
-import os
-import argparse
+import os, shutil, argparse, warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+if shutil.which('latex'):
+    mpl.rcParams["text.usetex"] = True
+    mpl.rcParams["text.latex.preamble"] = r"\usepackage{amsmath,amssymb}"
 
 from torch.nn.functional import mse_loss as MSELoss
 
@@ -30,23 +35,27 @@ class CData:
         self.lookahead = 4
         self.batch_size = 64
         self.lr = 5e-4
-        self.server_lr = 1e-3
+        self.server_lr = 1e-2
         self.beta = 0.9
         self.beta_1 = 0.9
         self.beta_2 = 0.9
+        self.beta_1s = 0.5
+        self.beta_2s = 0.5
         self.eps = 1e-8
         self.n_clients = 12
         self.state = args.state
         self.train_test_split = 0.8
-        self.local_epochs = 10
-        self.global_epochs = 2
-        self.net_hidden_size = 25
+        self.local_epochs = 100
+        self.global_epochs = 120
+        self.net_hidden_size = 30
         self.n_lstm_layers = 2
         self.weight_decay = 1e-1
-        self.test_every = 1
+        self.test_every = 20
         self.save_at_end = True
         
 def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
+    
+    # master function to do fed learning
     
     # set seed
     set_seed(10)
@@ -58,8 +67,11 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
         # server
         if global_name == 'FedAvgAdaptive':
             model = [LSTMForecast(**model_kw).to(device) for _ in range(total_clients)] # server's aggregate model
+            for m in model:
+                m.lstm_model.flatten_parameters()
         else:
             model = LSTMForecast(**model_kw).to(device) # server's aggregate model
+            model.lstm_model.flatten_parameters()
         globalOpt = global_opt(model=model,n_clients=total_clients,**global_kw)
         for e_global in range(cData.global_epochs):
             for cidx in range(total_clients):
@@ -82,6 +94,7 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
         dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=client_id,clientList=[3*i for i in range(comm.Get_size()-1)],seq_len=cData.seq_len,
                 lookahead=cData.lookahead,train_test_split=cData.train_test_split,device=device)
         model = LSTMForecast(**model_kw).to(device) # client's local model
+        model.lstm_model.flatten_parameters()
         localOpt = local_opt(model=model,p_layers=p_layers,**local_kw)
         mase_test = []
         for e_global in range(cData.global_epochs):
@@ -144,9 +157,9 @@ if __name__=="__main__":
     # global optim partial config
     fedavg_kw = {'lr':cData.server_lr,'weights':None}
     fedavgadaptive_kw = {'lr':cData.server_lr,'beta':cData.beta,'eps':cData.eps,'q':5,'weights':None}
-    fedadagrad_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1,'eps':cData.eps,'weights':None}
-    fedyogi_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1,'beta_2':cData.beta_2,'eps':cData.eps,'weights':None}
-    fedadam_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1,'beta_2':cData.beta_2,'eps':cData.eps,'weights':None}
+    fedadagrad_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'eps':cData.eps,'weights':None}
+    fedyogi_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'weights':None}
+    fedadam_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'weights':None}
     globalOptNames = [FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam]
     globalOptKw = [fedavg_kw,fedavgadaptive_kw,fedadagrad_kw,fedyogi_kw,fedadam_kw]
     
@@ -155,13 +168,13 @@ if __name__=="__main__":
     pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer3.weight','FCLayer2.bias','prelu1.weight','prelu2.weight'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
     pLayers = [pers0,pers1,pers2]
-    pLayerNames = ['allShared','linearHeadPersonalized','allPersonalized']
+    pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
     
     # loop testing
     for pl,pn in zip(pLayers,pLayerNames):
         errMat = np.zeros(shape=(len(localOptNames),len(globalOptNames)))
-        for gi,(go,gk) in enumerate(zip(globalOptNames,globalOptKw)):
-            for li,(lo,lk) in enumerate(zip(localOptNames,localOptKw)):
+        for li,(lo,lk) in enumerate(zip(localOptNames,localOptKw)):
+            for gi,(go,gk) in enumerate(zip(globalOptNames,globalOptKw)):
                 errors, me = learn_model(comm,cData,lk,lo,lo.__name__,gk,go,go.__name__,model_kw,pl,pn,device)
                 if cData.save_at_end:
                     topdir = os.getcwd()+f"/experiments{cData.state}/{pn}_{go.__name__}_{lo.__name__}/{'server' if comm.Get_rank()==0 else f'client{comm.Get_rank()-1}'}"
@@ -180,31 +193,26 @@ if __name__=="__main__":
                         plt.close()
                 else:
                     for cidx in range(comm.Get_size()-1):
-                        buf = np.array(0.).astype(np.float32)
+                        buf = np.empty(1,dtype=np.float32)
                         comm.Recv([buf,MPI.FLOAT],source=cidx+1)
-                        cur_error += (1/(comm.Get_size()-1))*buf
+                        cur_error += (1/(comm.Get_size()-1))*buf.item()
                 errMat[li,gi] = cur_error
-                comm.Barrier()
                 
-                # # send err matrix
-                # global_sum = np.zeros_like(errMat,dtype=np.float64)
-                # comm.Reduce([errMat,MPI.DOUBLE],[global_sum,MPI.DOUBLE],op=MPI.SUM,root=0)
-        # plot mase matrix
+
         if comm.Get_rank() == 0:
-            # recv data
-            # errMat = None
-            # global_sum = np.zeros_like(errMat,dtype=np.float64)
-            # comm.Reduce([errMat,MPI.DOUBLE],[global_sum,MPI.DOUBLE],op=MPI.SUM,root=0)
-            # errMat = global_sum
             plt.imshow(errMat, origin='lower', cmap='viridis', alpha = 0.5, extent=[0, errMat.shape[1], 0, errMat.shape[0]])
             plt.xticks([0.5+i for i in range(len(globalOptNames))],[itm.__name__ for itm in globalOptNames],rotation=90)
             plt.yticks([0.5+i for i in range(len(localOptNames))],[itm.__name__ for itm in localOptNames])
+            plt.gca().xaxis.set_minor_locator(MultipleLocator(1))
+            plt.gca().yaxis.set_minor_locator(MultipleLocator(1))
             for i in range(errMat.shape[0]):
                 for j in range(errMat.shape[1]):
-                    plt.annotate(f"{errMat[i, j]:.2f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
-            plt.title(r"Pers:$\mathbf{%s}$, DSET:$\mathbf{%s}$ Avg. final MASE Errors%slocalEpochs:%s, globalEpochs:%s%sModel:LSTM, lookback:%s, lookahead:%s%sclients:%s, batch:%s"%(
-                f'{pn}',f'{cData.state}',f'\n',f'{cData.local_epochs}',f'{cData.global_epochs}',f'\n',f'{cData.seq_len}',f'{cData.lookahead}',f'\n',f'{comm.Get_size()-1}',f'{cData.batch_size}'
+                    plt.annotate(f"{errMat[i, j]:.4f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
+            states = {'NY':'New York','CA':'California','IL':'Illinois'}
+            plt.title(r"Dataset:$\mathbf{%s}$, Personalization:$\textbf{%s}$%sAverage test MASE across all"%(
+                f'{states[cData.state]}',f'{pn}',f'\n'
             ))
             plt.colorbar()
+            plt.grid(which='minor',color='k')
             plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat{pn}.pdf',format='pdf',bbox_inches='tight') 
             plt.close()

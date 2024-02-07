@@ -30,7 +30,7 @@ class Prox:
         
         pass
         
-    def update(self,target_params:np.ndarray):
+    def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean')):
         
         # assuming here that the .grad params are populated
         grad_collector = []
@@ -76,7 +76,7 @@ class ProxAdam:
         
         self.update_count += 1
         
-    def update(self,target_params:np.ndarray):
+    def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean')):
         
         # assuming here that the .grad params are populated
         grad_collector = []
@@ -126,7 +126,7 @@ class Adam:
         
         self.update_count += 1
         
-    def update(self):
+    def update(self,inp,tar,lossfn=nn.MSELoss(reduction='mean')):
         
         # assuming here that the .grad params are populated
         grad_collector = []
@@ -178,7 +178,7 @@ class AdamAMS:
         
         self.update_count += 1
         
-    def update(self):
+    def update(self,inp,tar):
         
         # assuming here that the .grad params are populated
         grad_collector = []
