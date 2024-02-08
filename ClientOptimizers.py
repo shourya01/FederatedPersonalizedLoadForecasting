@@ -51,8 +51,8 @@ class Prox:
             grad_collector.append(m.grad.flatten())
         variate_correction = (c-self.c) if c is not None else 0
         grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() - variate_correction 
-        self.x -= self.lr*( grad + self.weight_decay*(self.x-target_params) )
-        self.me.set_flattened_params_shared(self.x)
+        self.x -= self.lr*( grad + self.weight_decay*(self.x-target_params)*self.me.gen_mask_for_slayers() )
+        self.me.set_flattened_params_all(self.x)
         self.update_count += 1
         
         if c is not None:
@@ -122,7 +122,7 @@ class ProxAdam:
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params) - variate_correction 
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)*self.me.gen_mask_for_slayers() - variate_correction 
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
         self.v = self.beta_2*self.v + (1-self.beta_2)*np.square(grad)
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))

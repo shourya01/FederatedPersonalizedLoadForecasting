@@ -63,6 +63,24 @@ class ModelExtractor:
         for p in self.model.parameters():
             return p.dtype
         
+    def gen_mask_for_players(self):
+        
+        # generate a mask for personalized layers
+        maskVals = []
+        for k,v in self.model.named_parameters():
+            mask = np.ones(torch.numel(v)) if k in self.pers_layers else np.zeros(torch.numel(v))
+            maskVals.append(mask)
+        return np.concatenate(maskVals,axis=0)
+    
+    def gen_mask_for_slayers(self):
+        
+        # generate a mask for personalized layers
+        maskVals = []
+        for k,v in self.model.named_parameters():
+            mask = np.zeros(torch.numel(v)) if k in self.pers_layers else np.ones(torch.numel(v))
+            maskVals.append(mask)
+        return np.concatenate(maskVals,axis=0)
+        
 class DatasetCleaner:
     
     # ingest numpy file, output random samples of train, or test set
