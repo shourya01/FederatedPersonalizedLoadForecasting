@@ -28,6 +28,9 @@ class LSTMForecast(nn.Module):
         if self.n_features > 1:
             if len(x.shape) != 3:
                 raise ValueError('Only accepting batched input!')
+        else:
+            if len(x.squeeze) != 2:
+                raise ValueError('Only accepting batched input!')
             
         # initialize output and cell state
         ht,ct = self._init_hidden(x.shape,x.device)

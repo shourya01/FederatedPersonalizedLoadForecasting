@@ -38,24 +38,24 @@ class CData:
         self.n_features = 8
         self.seq_len = 12
         self.lookahead = 4
-        self.batch_size = 64
-        self.lr = 5e-4
+        self.batch_size = 16
+        self.lr = 1e-3
         self.server_lr = 1e-2
-        self.beta = 0.9
-        self.beta_1 = 0.9
+        self.beta = 0.5
+        self.beta_1 = 0.5
         self.beta_2 = 0.9
         self.beta_1s = 0.5
-        self.beta_2s = 0.5
+        self.beta_2s = 0.9
         self.eps = 1e-8
         self.n_clients = 12
         self.state = args.state
         self.train_test_split = 0.8
-        self.local_epochs = 50
-        self.global_epochs = 100
-        self.net_hidden_size = 30
-        self.n_lstm_layers = 2
+        self.local_epochs = 125
+        self.global_epochs = 24
+        self.net_hidden_size = 25
+        self.n_lstm_layers = 1
         self.weight_decay = 1e-1
-        self.test_every = 50
+        self.test_every = 8
         self.save_at_end = True
         
 def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
@@ -78,23 +78,23 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
                     comm.Send([globalOpt.mes[cidx].get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
                 else:
                     comm.Send([globalOpt.me.get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
-                comm.Send([globalOpt.c.astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=1)
+                # comm.Send([globalOpt.c.astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=1)
             grads, deltaC = [], []
             for cidx in range(total_clients):
                 buf, buf_C = np.empty(globalOpt.num_params,dtype=np.float64), np.empty(globalOpt.num_params,dtype=np.float64)
                 comm.Recv([buf,MPI.DOUBLE],source=cidx+1,tag=0)
-                comm.Recv([buf_C,MPI.DOUBLE],source=cidx+1,tag=1)
+                # comm.Recv([buf_C,MPI.DOUBLE],source=cidx+1,tag=1)
                 grads.append(buf.copy())
-                deltaC.append(buf_C.copy())
+                # deltaC.append(buf_C.copy())
             globalOpt.aggregate_and_update(grads=grads)
-            globalOpt.c += np.mean(np.array(deltaC),axis=0)
+            # globalOpt.c += np.mean(np.array(deltaC),axis=0)
         returnME = globalOpt.mes[0] if global_name=='FedAvgAdaptive' else globalOpt.me
         return None,returnME
     
     else:
         # clients
         client_id = rank - 1 # because 0 is server
-        dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=client_id,clientList=[3*i for i in range(comm.Get_size()-1)],seq_len=cData.seq_len,
+        dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=client_id,clientList=np.arange(comm.Get_size()-1).tolist(),seq_len=cData.seq_len,
                 lookahead=cData.lookahead,train_test_split=cData.train_test_split,device=device)
         model = LSTMForecast(**model_kw).to(device) # client's local model
         localOpt = local_opt(model=model,p_layers=p_layers,**local_kw)
@@ -104,18 +104,18 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
             comm.Recv([buf,MPI.DOUBLE],source=0,tag=0)
             if local_name in ['Adam','AdamAMS']:
                 localOpt.me.set_flattened_params_shared(buf)
-            buf_c = np.empty(localOpt.me.num_params,dtype=np.float64)
-            comm.Recv([buf_c,MPI.DOUBLE],source=0,tag=1)
+            # buf_c = np.empty(localOpt.me.num_params,dtype=np.float64)
+            # comm.Recv([buf_c,MPI.DOUBLE],source=0,tag=1)
             before_update = localOpt.me.get_flattened_params()
             if p_name != 'All layers personalized':
                 localOpt.reset_counter()
             for e_local in range(cData.local_epochs):
                 input, label = dset.sample_train(cData.batch_size)
                 localOpt.update(input,label,buf)
-                localOpt.update_variates()
+                # localOpt.update_variates()
             comm.Send([(localOpt.me.get_flattened_params()-before_update).astype(np.float64),MPI.DOUBLE],dest=0,tag=0)
-            comm.Send([localOpt.delta.astype(np.float64),MPI.DOUBLE],dest=0,tag=1)
-            if e_global % cData.test_every == 0 or e_global == cData.global_epochs-1:
+            # comm.Send([localOpt.delta.astype(np.float64),MPI.DOUBLE],dest=0,tag=1)
+            if (e_global+1) % cData.test_every == 0 or e_global == cData.global_epochs-1:
                 mase = lambda y,x,p: np.mean(np.abs(x - y)) / np.mean(np.abs(x - p))
                 test_in, test_out, test_persistence = dset.get_test_dset()
                 loss_val = mase(model(test_in).detach().cpu().flatten().numpy()*(dset.pmax-dset.pmin)+dset.pmin,test_out.cpu().flatten().numpy(),test_persistence.cpu().flatten().numpy()).item()
@@ -170,8 +170,10 @@ if __name__=="__main__":
     pers0 = [] # all shared
     pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer3.weight','FCLayer2.bias','prelu1.weight','prelu2.weight'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
-    pLayers = [pers0,pers1,pers2]
-    pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
+    # pLayers = [pers0,pers1,pers2]
+    # pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
+    pLayers = [pers1,pers2]
+    pLayerNames = ['Linear head personalized','All layers personalized']
     
     # loop testing
     for pl,pn in zip(pLayers,pLayerNames):
