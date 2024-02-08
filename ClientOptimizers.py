@@ -50,7 +50,7 @@ class Prox:
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() + variate_correction
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() - variate_correction 
         self.x -= self.lr*( grad + self.weight_decay*(self.x-target_params) )
         self.me.set_flattened_params_shared(self.x)
         self.update_count += 1
@@ -62,8 +62,9 @@ class Prox:
             
     def update_variates(self):
         
-        self.c -= self.inputC - (1/(self.update_count*self.lr))*(self.latest_target-self.x)
-        self.delta = self.c - self.inputC
+        self.old_c = self.c.copy()
+        self.c = self.c -self.inputC + (1/(self.update_count*self.lr))*(self.x-self.latest_target)
+        self.delta = self.c - self.old_c
         
 class ProxAdam:
     
@@ -121,12 +122,12 @@ class ProxAdam:
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params) + variate_correction
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params) - variate_correction 
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
         self.v = self.beta_2*self.v + (1-self.beta_2)*np.square(grad)
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))
         self.vhat = self.v / (1-np.power(self.beta_2,self.update_count))
-        self.x -= self.lr*self.mhat / (np.sqrt(self.vhat) + self.eps)
+        self.x -= self.lr*(self.mhat / (np.sqrt(self.vhat) + self.eps))
         self.me.set_flattened_params_all(self.x)
         self.update_count += 1
         
@@ -137,8 +138,9 @@ class ProxAdam:
             
     def update_variates(self):
         
-        self.c -= self.inputC - (1/(self.update_count*self.lr))*(self.latest_target-self.x)
-        self.delta = self.c - self.inputC
+        self.old_c = self.c.copy()
+        self.c = self.c -self.inputC + (1/(self.update_count*self.lr))*(self.x-self.latest_target)
+        self.delta = self.c - self.old_c
 
 class Adam:
     
@@ -194,12 +196,12 @@ class Adam:
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() + variate_correction
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() - variate_correction 
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
         self.v = self.beta_2*self.v + (1-self.beta_2)*np.square(grad)
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))
         self.vhat = self.v / (1-np.power(self.beta_2,self.update_count))
-        self.x -= self.lr*self.mhat / (np.sqrt(self.vhat) + self.eps)
+        self.x -= self.lr*(self.mhat / (np.sqrt(self.vhat) + self.eps))
         self.me.set_flattened_params_all(self.x)
         self.update_count += 1
         
@@ -210,8 +212,9 @@ class Adam:
             
     def update_variates(self):
         
-        self.c -= self.inputC - (1/(self.update_count*self.lr))*(self.latest_target-self.x)
-        self.delta = self.c - self.inputC
+        self.old_c = self.c.copy()
+        self.c = self.c -self.inputC + (1/(self.update_count*self.lr))*(self.x-self.latest_target)
+        self.delta = self.c - self.old_c
         
         
 class AdamAMS:
@@ -269,13 +272,13 @@ class AdamAMS:
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() + variate_correction
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() - variate_correction
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
         self.v = self.beta_2*self.v + (1-self.beta_2)*np.square(grad)
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))
         self.vhat = self.v / (1-np.power(self.beta_2,self.update_count))
         self.vhatmax = np.maximum(self.vhat,self.vhatmax)
-        self.x -= self.lr*self.mhat / (np.sqrt(self.vhatmax) + self.eps)
+        self.x -= self.lr*(self.mhat / (np.sqrt(self.vhatmax) + self.eps))
         self.me.set_flattened_params_all(self.x)
         self.update_count += 1
         
@@ -286,5 +289,6 @@ class AdamAMS:
         
     def update_variates(self):
         
-        self.c -= -self.inputC + (1/(self.update_count*self.lr))*(self.latest_target-self.x)
-        self.delta = self.c - self.inputC
+        self.old_c = self.c.copy()
+        self.c = self.c -self.inputC + (1/(self.update_count*self.lr))*(self.x-self.latest_target)
+        self.delta = self.c - self.old_c
