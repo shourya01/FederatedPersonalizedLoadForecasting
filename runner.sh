@@ -15,6 +15,7 @@ cd ~/FederatedPersonalizedLoadForecasting
 
 export ENVN="APPFLENV"
 export STATE="IL"
+export PATH="/home/sbose/.latex/bin/x86_64-linux:${PATH}"
 
 module load anaconda3
 source activate $ENVN

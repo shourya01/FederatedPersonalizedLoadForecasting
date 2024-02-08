@@ -10,8 +10,11 @@ import os, shutil, argparse, warnings
 from datetime import datetime
 warnings.filterwarnings("ignore", category=UserWarning)
 if shutil.which('latex'):
+    print("Latex detected!",flush=True)
     mpl.rcParams["text.usetex"] = True
     mpl.rcParams["text.latex.preamble"] = r"\usepackage{amsmath,amssymb}"
+else:
+    print("Latex not detected!",flush=True)
 
 from torch.nn.functional import mse_loss as MSELoss
 
