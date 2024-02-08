@@ -51,7 +51,7 @@ class CData:
         self.state = args.state
         self.train_test_split = 0.8
         self.local_epochs = 125
-        self.global_epochs = 24
+        self.global_epochs = 40
         self.net_hidden_size = 25
         self.n_lstm_layers = 1
         self.weight_decay = 1e-1
