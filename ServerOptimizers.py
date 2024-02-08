@@ -17,6 +17,7 @@ class FedAvg:
         
     def init_states(self):
         self.x = self.me.get_flattened_params()
+        self.c = np.zeros(self.num_params)
         
     def aggregate_and_update(self,grads=None):
         if self.weights is None:
@@ -44,6 +45,7 @@ class FedAvgAdaptive:
         
     def init_states(self):
         self.x = [me.get_flattened_params() for me in self.mes]
+        self.c = np.zeros(self.num_params)
         self.client_vars = [np.ones((self.num_params,)) for _ in range(self.n_clients)]
         
     def aggregate_and_update(self, grads=None):
@@ -81,6 +83,7 @@ class FedAdagrad:
         self.x = self.me.get_flattened_params()
         self.m = np.zeros(self.num_params)
         self.v = np.ones(self.num_params)
+        self.c = np.zeros(self.num_params)
         
     def aggregate_and_update(self, grads=None):
         if self.weights is None:
@@ -110,6 +113,7 @@ class FedYogi:
         self.x = self.me.get_flattened_params()
         self.m = np.zeros(self.num_params)
         self.v = np.ones(self.num_params)
+        self.c = np.zeros(self.num_params)
         
     def aggregate_and_update(self, grads=None):
         if self.weights is None:
@@ -141,6 +145,7 @@ class FedAdam:
         self.x = self.me.get_flattened_params()
         self.m = np.zeros(self.num_params)
         self.v = np.ones(self.num_params)
+        self.c = np.zeros(self.num_params)
         
     def aggregate_and_update(self, grads=None):
         if self.weights is None:

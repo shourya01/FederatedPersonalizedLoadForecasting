@@ -75,12 +75,15 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
                     comm.Send([globalOpt.mes[cidx].get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
                 else:
                     comm.Send([globalOpt.me.get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
-            grads = []
+                comm.Send([globalOpt.c.astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
+            grads, deltaC = [], []
             for cidx in range(total_clients):
-                buf = np.empty(globalOpt.num_params,dtype=np.float64)
+                buf, buf_C = np.empty(globalOpt.num_params,dtype=np.float64), np.empty(globalOpt.num_params,dtype=np.float64)
                 comm.Recv([buf,MPI.DOUBLE],source=cidx+1,tag=0)
+                comm.Recv([buf_C,MPI.DOUBLE],source=cidx+1,tag=0)
                 grads.append(buf.copy())
             globalOpt.aggregate_and_update(grads=grads)
+            globalOpt.c += np.mean(np.array(buf_C),axis=0)
         returnME = globalOpt.mes[0] if global_name=='FedAvgAdaptive' else globalOpt.me
         return None,returnME
     
@@ -97,16 +100,17 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
             comm.Recv([buf,MPI.DOUBLE],source=0,tag=0)
             if local_name in ['Adam','AdamAMS']:
                 localOpt.me.set_flattened_params_shared(buf)
+            buf_c = np.empty(localOpt.me.num_params,dtype=np.float64)
+            comm.Recv([buf_c,MPI.DOUBLE],source=0,tag=0)
             before_update = localOpt.me.get_flattened_params()
             if p_name != 'All layers personalized':
                 localOpt.reset_counter()
             for e_local in range(cData.local_epochs):
                 input, label = dset.sample_train(cData.batch_size)
-                if local_name in ['Prox','ProxAdam']:
-                    localOpt.update(input,label,buf)
-                else:
-                    localOpt.update(input,label)
+                localOpt.update(input,label,buf,c=buf_c)
+                localOpt.update_variates()
             comm.Send([(localOpt.me.get_flattened_params()-before_update).astype(np.float64),MPI.DOUBLE],dest=0,tag=0)
+            comm.Send([localOpt.delta.astype(np.float64),MPI.DOUBLE],dest=0,tag=0)
             if e_global % cData.test_every == 0 or e_global == cData.global_epochs-1:
                 mase = lambda y,x,p: np.mean(np.abs(x - y)) / np.mean(np.abs(x - p))
                 test_in, test_out, test_persistence = dset.get_test_dset()
@@ -195,22 +199,22 @@ if __name__=="__main__":
                 errMat[li,gi] = cur_error 
 
         if comm.Get_rank() == 0:
-            # plt.imshow(errMat, origin='lower', cmap='viridis', alpha = 0.5, extent=[0, errMat.shape[1], 0, errMat.shape[0]])
-            # plt.xticks([0.5+i for i in range(len(globalOptNames))],[itm.__name__ for itm in globalOptNames],rotation=90)
-            # plt.yticks([0.5+i for i in range(len(localOptNames))],[itm.__name__ for itm in localOptNames])
-            # plt.gca().xaxis.set_minor_locator(MultipleLocator(1))
-            # plt.gca().yaxis.set_minor_locator(MultipleLocator(1))
-            # for i in range(errMat.shape[0]):
-            #     for j in range(errMat.shape[1]):
-            #         plt.annotate(f"{errMat[i, j]:.4f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
-            # states = {'NY':'New York','CA':'California','IL':'Illinois'}
-            # plt.title(r"Dataset:$\textbf{%s}$, Personalization:$\textbf{%s}$%sAverage test MASE across all clients"%(
-            #     f'{states[cData.state]}',f'{pn}',f'\n'
-            # ))
-            # plt.colorbar()
-            # plt.grid(which='minor',color='k')
-            # plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat{pn}.pdf',format='pdf',bbox_inches='tight') 
-            # plt.close()
+            plt.imshow(errMat, origin='lower', cmap='viridis', alpha = 0.5, extent=[0, errMat.shape[1], 0, errMat.shape[0]])
+            plt.xticks([0.5+i for i in range(len(globalOptNames))],[itm.__name__ for itm in globalOptNames],rotation=90)
+            plt.yticks([0.5+i for i in range(len(localOptNames))],[itm.__name__ for itm in localOptNames])
+            plt.gca().xaxis.set_minor_locator(MultipleLocator(1))
+            plt.gca().yaxis.set_minor_locator(MultipleLocator(1))
+            for i in range(errMat.shape[0]):
+                for j in range(errMat.shape[1]):
+                    plt.annotate(f"{errMat[i, j]:.4f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
+            states = {'NY':'New York','CA':'California','IL':'Illinois'}
+            plt.title(r"Dataset:$\textbf{%s}$, Personalization:$\textbf{%s}$%sAverage test MASE across all clients"%(
+                f'{states[cData.state]}',f'{pn}',f'\n'
+            ))
+            plt.colorbar()
+            plt.grid(which='minor',color='k')
+            plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat_{localOptNames[0]}_{pn}.pdf',format='pdf',bbox_inches='tight') 
+            plt.close()
             with open(expath+'/results.txt',"a") as file:
                 file.write(f"\ndt={str(datetime.now())}\nFor global={[i.__name__ for i in globalOptNames]},\n local={[i.__name__ for i in localOptNames]},\n state={cData.state}, pers={pn} MASES are:\n")
                 file.write(f"{errMat}\n")
