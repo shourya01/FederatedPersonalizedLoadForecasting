@@ -172,8 +172,8 @@ if __name__=="__main__":
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
     # pLayers = [pers0,pers1,pers2]
     # pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
-    pLayers = [pers1,pers2]
-    pLayerNames = ['Linear head personalized','All layers personalized']
+    pLayers = [pers0]
+    pLayerNames = ['All layers shared']
     
     # loop testing
     for pl,pn in zip(pLayers,pLayerNames):
