@@ -110,7 +110,7 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
                 localOpt.reset_counter()
             for e_local in range(cData.local_epochs):
                 input, label = dset.sample_train(cData.batch_size)
-                localOpt.update(input,label,buf,c=buf_c)
+                localOpt.update(input,label,buf)
                 localOpt.update_variates()
             comm.Send([(localOpt.me.get_flattened_params()-before_update).astype(np.float64),MPI.DOUBLE],dest=0,tag=0)
             comm.Send([localOpt.delta.astype(np.float64),MPI.DOUBLE],dest=0,tag=0)
