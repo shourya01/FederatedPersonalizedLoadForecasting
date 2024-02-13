@@ -25,6 +25,7 @@ from utils import DatasetCleaner, ModelExtractor, set_seed
 #args
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--state',type=str,default='CA')
+parser.add_argument('--alpha',type=float,default=1e-1)
 parser.add_argument('--choice_local',type=int,choices = [0,1,2,3])
 args = parser.parse_args()
  
@@ -54,8 +55,8 @@ class CData:
         self.global_epochs = 40
         self.net_hidden_size = 25
         self.n_lstm_layers = 1
-        self.weight_decay = 1e-1
-        self.test_every = 8
+        self.weight_decay = args.alpha
+        self.test_every = 10
         self.save_at_end = True
         
 def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
@@ -109,7 +110,7 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
             before_update = localOpt.me.get_flattened_params()
             if p_name != 'All layers personalized':
                 localOpt.reset_counter()
-            for e_local in range(cData.local_epochs):
+            for _ in range(cData.local_epochs):
                 input, label = dset.sample_train(cData.batch_size)
                 localOpt.update(input,label,buf)
                 # localOpt.update_variates()
@@ -168,10 +169,14 @@ if __name__=="__main__":
     
     # personalization levels
     pers0 = [] # all shared
-    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer3.weight','FCLayer2.bias','prelu1.weight','prelu2.weight'] # linear head personalized
+    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias','prelu1.weight','prelu2.weight'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
-    pLayers = [pers0,pers1,pers2]
-    pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
+    # pLayers = [pers0,pers1,pers2]
+    # pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
+    
+    #to change later
+    pLayers = [pers0]
+    pLayerNames = ['All layers shared']
     
     # loop testing
     for pl,pn in zip(pLayers,pLayerNames):
@@ -212,13 +217,13 @@ if __name__=="__main__":
                 for j in range(errMat.shape[1]):
                     plt.annotate(f"{errMat[i, j]:.4f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
             states = {'NY':'New York','CA':'California','IL':'Illinois'}
-            plt.title(r"Dataset:$\textbf{%s}$, Personalization:$\textbf{%s}$%sAverage test MASE across all clients"%(
-                f'{states[cData.state]}',f'{pn}',f'\n'
+            plt.title(r"Dataset:$\textbf{%s}$,%sPersonalization:$\textbf{%s}$%sAverage test MASE across all clients%sProximal param. $\alpha=%s$"%(
+                f'{states[cData.state]}',f'\n',f'{pn}',f'\n',f'\n',f'{cData.weight_decay}'
             ))
             plt.colorbar()
             plt.grid(which='minor',color='k')
-            plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat_{localOptNames[0].__name__}_{pn}.pdf',format='pdf',bbox_inches='tight') 
+            plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat_{localOptNames[0].__name__}_{pn}_{cData.weight_decay}.pdf',format='pdf',bbox_inches='tight') 
             plt.close()
             with open(expath+'/results.txt',"a") as file:
-                file.write(f"\ndt={str(datetime.now())}\nFor global={[i.__name__ for i in globalOptNames]},\n local={[i.__name__ for i in localOptNames]},\n state={cData.state}, pers={pn} MASES are:\n")
+                file.write(f"\ndt={str(datetime.now())}\nFor global={[i.__name__ for i in globalOptNames]},\n local={[i.__name__ for i in localOptNames]},\n state={cData.state}, pers={pn}, alpha={cData.weight_decay} MASES are:\n")
                 file.write(f"{errMat}\n")

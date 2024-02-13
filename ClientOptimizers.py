@@ -10,21 +10,11 @@ class Prox:
     def __init__(self,model=nn.Module,p_layers=[],lr=1e-3,weight_decay=1e-1):
         
         self.model = model
-        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
         self.me = ModelExtractor(self.model,p_layers)
         self.lr = lr
         self.weight_decay = weight_decay
         self.update_count = 1
-        
-        # number of params in model
-        nparams = 0
-        for _,v in self.model.named_parameters():
-            nparams += torch.numel(v)
-        self.nparams = nparams
-        
-        # control variate and targets
-        self.c = np.zeros(self.nparams)
-        self.latest_target = np.zeros(self.nparams)
+        self.nparams = self.me.num_params
         
         self.init_state()
         
@@ -36,13 +26,15 @@ class Prox:
         
         self.update_count = 1
         
-    def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean'),c=None):
+    def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean')):
         
         # save latest target
         self.latest_target = target_params
         
         # populate .grad
-        self.optim.zero_grad()
+        for p in self.model.parameters():
+            if p.grad is not None:
+                p.grad.zero_()
         lossfn(self.model(inp),tar).backward()
         
         # assuming here that the .grad params are populated
@@ -50,21 +42,10 @@ class Prox:
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() - variate_correction 
-        self.x -= self.lr*( grad + self.weight_decay*(self.x-target_params)*self.me.gen_mask_for_slayers() )
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)*self.me.gen_mask_for_slayers() 
+        self.x -= self.lr*( grad  )
         self.me.set_flattened_params_all(self.x)
         self.update_count += 1
-        
-        if c is not None:
-            self.inputC = c
-        else:
-            self.inputC = np.zeros(self.c.shape)
-            
-    def update_variates(self):
-        
-        self.old_c = self.c.copy()
-        self.c = self.c -self.inputC + (1/(self.update_count*self.lr))*(self.x-self.latest_target)
-        self.delta = self.c - self.old_c
         
 class ProxAdam:
     
@@ -73,19 +54,9 @@ class ProxAdam:
     def __init__(self,model=nn.Module,p_layers=[],lr=1e-3,beta_1=0.9,beta_2=0.999,eps=1e-8,weight_decay=1e-8):
         
         self.model = model
-        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
         self.me = ModelExtractor(self.model,p_layers)
         self.update_count = 1
-        
-        # number of params in model
-        nparams = 0
-        for _,v in self.model.named_parameters():
-            nparams += torch.numel(v)
-        self.nparams = nparams
-        
-        # control variate and targets
-        self.c = np.zeros(self.nparams)
-        self.latest_target = np.zeros(self.nparams)
+        self.nparams = self.me.num_params
         
         self.lr = lr
         self.beta_1 = beta_1
@@ -105,24 +76,24 @@ class ProxAdam:
         
     def reset_counter(self):
         
-        self.update_count += 1
+        self.update_count = 1
         
-    def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean'),c=None):
+    def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean')):
         
         # save latest target
         self.latest_target = target_params
         
         # populate .grad
-        self.optim.zero_grad()
-        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
+        for p in self.model.parameters():
+            if p.grad is not None:
+                p.grad.zero_()
         lossfn(self.model(inp),tar).backward()
         
         # assuming here that the .grad params are populated
         grad_collector = []
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
-        variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)*self.me.gen_mask_for_slayers() - variate_correction 
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)*self.me.gen_mask_for_slayers()
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
         self.v = self.beta_2*self.v + (1-self.beta_2)*np.square(grad)
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))
@@ -130,17 +101,6 @@ class ProxAdam:
         self.x -= self.lr*(self.mhat / (np.sqrt(self.vhat) + self.eps))
         self.me.set_flattened_params_all(self.x)
         self.update_count += 1
-        
-        if c is not None:
-            self.inputC = c
-        else:
-            self.inputC = np.zeros(self.c.shape)
-            
-    def update_variates(self):
-        
-        self.old_c = self.c.copy()
-        self.c = self.c -self.inputC + (1/(self.update_count*self.lr))*(self.x-self.latest_target)
-        self.delta = self.c - self.old_c
 
 class Adam:
     
@@ -149,7 +109,6 @@ class Adam:
     def __init__(self,model=nn.Module,p_layers=[],lr=1e-3,beta_1=0.9,beta_2=0.999,eps=1e-8):
         
         self.model = model
-        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
         self.me = ModelExtractor(self.model,p_layers)
         self.update_count = 1
         
@@ -157,16 +116,7 @@ class Adam:
         self.beta_1 = beta_1
         self.beta_2 = beta_2
         self.eps = eps
-        
-        # number of params in model
-        nparams = 0
-        for _,v in self.model.named_parameters():
-            nparams += torch.numel(v)
-        self.nparams = nparams
-        
-        # control variate and targets
-        self.c = np.zeros(self.nparams)
-        self.latest_target = np.zeros(self.nparams)
+        self.nparams = self.me.num_params
         
         self.init_state()
         
@@ -180,23 +130,24 @@ class Adam:
         
     def reset_counter(self):
         
-        self.update_count += 1
+        self.update_count = 1
         
-    def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean'),c=None):
+    def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean')):
         
         # save latest target
         self.latest_target = target_params
         
         # populate .grad
-        self.optim.zero_grad()
+        for p in self.model.parameters():
+            if p.grad is not None:
+                p.grad.zero_()
         lossfn(self.model(inp),tar).backward()
         
         # assuming here that the .grad params are populated
         grad_collector = []
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
-        variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() - variate_correction 
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() 
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
         self.v = self.beta_2*self.v + (1-self.beta_2)*np.square(grad)
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))
@@ -204,17 +155,6 @@ class Adam:
         self.x -= self.lr*(self.mhat / (np.sqrt(self.vhat) + self.eps))
         self.me.set_flattened_params_all(self.x)
         self.update_count += 1
-        
-        if c is not None:
-            self.inputC = c
-        else:
-            self.inputC = np.zeros(self.c.shape)
-            
-    def update_variates(self):
-        
-        self.old_c = self.c.copy()
-        self.c = self.c -self.inputC + (1/(self.update_count*self.lr))*(self.x-self.latest_target)
-        self.delta = self.c - self.old_c
         
         
 class AdamAMS:
@@ -224,7 +164,6 @@ class AdamAMS:
     def __init__(self,model=nn.Module,p_layers=[],lr=1e-3,beta_1=0.9,beta_2=0.999,eps=1e-8):
         
         self.model = model
-        self.optim = torch.optim.SGD(self.model.parameters(),lr=1e-3)
         self.me = ModelExtractor(self.model,p_layers)
         self.update_count = 1
         
@@ -232,16 +171,7 @@ class AdamAMS:
         self.beta_1 = beta_1
         self.beta_2 = beta_2
         self.eps = eps
-        
-        # number of params in model
-        nparams = 0
-        for _,v in self.model.named_parameters():
-            nparams += torch.numel(v)
-        self.nparams = nparams
-        
-        # control variate and targets
-        self.c = np.zeros(self.nparams)
-        self.latest_target = np.zeros(self.nparams)
+        self.nparams = self.me.num_params
         
         self.init_state()
         
@@ -256,7 +186,7 @@ class AdamAMS:
         
     def reset_counter(self):
         
-        self.update_count += 1
+        self.update_count = 1
         
     def update(self,inp,tar,target_params:np.ndarray,lossfn=nn.MSELoss(reduction='mean'),c=None):
         
@@ -264,7 +194,9 @@ class AdamAMS:
         self.latest_target = target_params
         
         # populate .grad
-        self.optim.zero_grad()
+        for p in self.model.parameters():
+            if p.grad is not None:
+                p.grad.zero_()
         lossfn(self.model(inp),tar).backward()
         
         # assuming here that the .grad params are populated
@@ -272,7 +204,7 @@ class AdamAMS:
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
         variate_correction = (c-self.c) if c is not None else 0
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() - variate_correction
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy() 
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
         self.v = self.beta_2*self.v + (1-self.beta_2)*np.square(grad)
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))
@@ -281,14 +213,3 @@ class AdamAMS:
         self.x -= self.lr*(self.mhat / (np.sqrt(self.vhatmax) + self.eps))
         self.me.set_flattened_params_all(self.x)
         self.update_count += 1
-        
-        if c is not None:
-            self.inputC = c
-        else:
-            self.inputC = np.zeros(self.c.shape)
-        
-    def update_variates(self):
-        
-        self.old_c = self.c.copy()
-        self.c = self.c -self.inputC + (1/(self.update_count*self.lr))*(self.x-self.latest_target)
-        self.delta = self.c - self.old_c

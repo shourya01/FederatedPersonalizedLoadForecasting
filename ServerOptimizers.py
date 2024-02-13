@@ -157,26 +157,4 @@ class FedAdam:
         self.x += self.lr*self.m/(np.sqrt(self.v)+self.eps)
         self.me.set_flattened_params_all(self.x)
         
-# class FedProxServer(GradientAggregator):
-    
-#     def __init__(self,n_clients=2,num_params=100,lr=1e-3,weights = None):
-#         super().__init__(n_clients,num_params)
-#         self.lr = lr
-#         self.weights = weights
-#         self.init_states()
-        
-#     def init_states(self):
-#         self.lam = np.zeros(self.num_params)
-#         self.x = np.zeros(self.num_params)
-        
-#     def aggregate_and_update(self, grads=None):
-#         if self.weights is None:
-#             grads = np.array(grads)
-#         else:
-#             grads = np.array([itm*self.weights[i] for i,itm in enumerate(grads)])
-        
-#         self.lam -= self.alpha*(np.mean(grads,axis=-1)-(1/len(grads))*self.x)
-        
-#         self.x += self.lr*self.m/(np.sqrt(self.v)+self.eps)
-        
         
