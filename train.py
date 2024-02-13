@@ -215,7 +215,7 @@ if __name__=="__main__":
             plt.gca().yaxis.set_minor_locator(MultipleLocator(1))
             for i in range(errMat.shape[0]):
                 for j in range(errMat.shape[1]):
-                    plt.annotate(f"{errMat[i, j]:.4f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
+                    plt.annotate(f"{errMat[i, j]:.6f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
             states = {'NY':'New York','CA':'California','IL':'Illinois'}
             plt.title(r"Dataset:$\textbf{%s}$,%sPersonalization:$\textbf{%s}$%sAverage test MASE across all clients%sProximal param. $\alpha=%s$"%(
                 f'{states[cData.state]}',f'\n',f'{pn}',f'\n',f'\n',f'{cData.weight_decay}'
