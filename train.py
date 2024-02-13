@@ -18,7 +18,7 @@ else:
 
 from torch.nn.functional import mse_loss as MSELoss
 
-from ServerOptimizers import FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam
+from ServerOptimizers import FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam,FAFED
 from ClientOptimizers import Prox, ProxAdam, Adam, AdamAMS
 from utils import DatasetCleaner, ModelExtractor, set_seed
 
@@ -160,12 +160,13 @@ if __name__=="__main__":
     
     # global optim partial config
     fedavg_kw = {'lr':cData.server_lr,'weights':None}
-    fedavgadaptive_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'q':5,'weights':None}
+    fedavgadaptive_kw = {'lr':cData.server_lr,'beta_2':cData.beta_2s,'eps':cData.eps,'q':5,'weights':None}
+    fafed_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'q':5,'weights':None}
     fedadagrad_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'eps':cData.eps,'weights':None}
     fedyogi_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'weights':None}
     fedadam_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'weights':None}
-    globalOptNames = [FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam]
-    globalOptKw = [fedavg_kw,fedavgadaptive_kw,fedadagrad_kw,fedyogi_kw,fedadam_kw]
+    globalOptNames = [FedAvg,FedAvgAdaptive,FAFED,FedAdagrad,FedYogi,FedAdam]
+    globalOptKw = [fedavg_kw,fedavgadaptive_kw,fafed_kw,fedadagrad_kw,fedyogi_kw,fedadam_kw]
     
     # personalization levels
     pers0 = [] # all shared
@@ -209,7 +210,7 @@ if __name__=="__main__":
 
         if comm.Get_rank() == 0:
             plt.imshow(errMat, origin='lower', cmap='viridis', alpha = 0.5, extent=[0, errMat.shape[1], 0, errMat.shape[0]])
-            plt.xticks([0.5+i for i in range(len(globalOptNames))],[itm.__name__ if not itm.__name__=='FedAvgAdaptive' else r'FedAvgAdaptive with $\mathbf{m}$' for itm in globalOptNames],rotation=90)
+            plt.xticks([0.5+i for i in range(len(globalOptNames))],[itm.__name__ for itm in globalOptNames],rotation=90)
             plt.yticks([0.5+i for i in range(len(localOptNames))],[itm.__name__ for itm in localOptNames])
             plt.gca().xaxis.set_minor_locator(MultipleLocator(1))
             plt.gca().yaxis.set_minor_locator(MultipleLocator(1))
