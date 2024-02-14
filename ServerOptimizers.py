@@ -94,7 +94,7 @@ class FAFED:
             self.m[idx] = self.beta_1*self.m[idx] + (1-self.beta_1)*grads[idx]
             self.v[idx] = self.beta_2*self.v[idx] + (1-self.beta_2)*np.square(grads[idx])
         if self.update_count % self.q != 0:
-            for idx in range(len(self.client_vars)): 
+            for idx in range(self.n_clients): 
                 self.x[idx] += self.lr*self.m[idx]/(np.sqrt(self.v[idx])+self.eps)
                 self.mes[idx].set_flattened_params_all(self.x[idx])
         else:

@@ -18,14 +18,14 @@ else:
 
 from torch.nn.functional import mse_loss as MSELoss
 
-from ServerOptimizers import FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam,FAFED
+from ServerOptimizers import FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam
 from ClientOptimizers import Prox, ProxAdam, Adam, AdamAMS
-from utils import DatasetCleaner, ModelExtractor, set_seed
+from utils import DatasetCleaner, set_seed
 
 #args
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--state',type=str,default='CA')
-parser.add_argument('--alpha',type=float,default=1e-1)
+parser.add_argument('--alpha',type=float,default=1e-2)
 parser.add_argument('--choice_local',type=int,choices = [0,1,2,3])
 args = parser.parse_args()
  
@@ -71,25 +71,25 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
     
     if rank == 0:
         # server
-        model = LSTMForecast(**model_kw).to(device) if global_name!='FedAvgAdaptive' else [LSTMForecast(**model_kw).to(device) for _ in range(total_clients)]# server's aggregate model
+        model = LSTMForecast(**model_kw).to(device) if global_name!='FedAvgAdaptive' and global_name!='FAFED' else [LSTMForecast(**model_kw).to(device) for _ in range(total_clients)]# server's aggregate model
         globalOpt = global_opt(model=model,n_clients=total_clients,**global_kw)
         for e_global in range(cData.global_epochs):
             for cidx in range(total_clients):
-                if global_name == 'FedAvgAdaptive':
+                if global_name == 'FedAvgAdaptive' or global_name == 'FAFED':
                     comm.Send([globalOpt.mes[cidx].get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
                 else:
                     comm.Send([globalOpt.me.get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
                 # comm.Send([globalOpt.c.astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=1)
-            grads, deltaC = [], []
+            grads = []
             for cidx in range(total_clients):
-                buf, buf_C = np.empty(globalOpt.num_params,dtype=np.float64), np.empty(globalOpt.num_params,dtype=np.float64)
+                buf = np.empty(globalOpt.num_params,dtype=np.float64)
                 comm.Recv([buf,MPI.DOUBLE],source=cidx+1,tag=0)
                 # comm.Recv([buf_C,MPI.DOUBLE],source=cidx+1,tag=1)
                 grads.append(buf.copy())
                 # deltaC.append(buf_C.copy())
             globalOpt.aggregate_and_update(grads=grads)
             # globalOpt.c += np.mean(np.array(deltaC),axis=0)
-        returnME = globalOpt.mes[0] if global_name=='FedAvgAdaptive' else globalOpt.me
+        returnME = globalOpt.mes[0] if (global_name=='FedAvgAdaptive' or global_name=='FAFED') else globalOpt.me
         return None,returnME
     
     else:
@@ -161,12 +161,12 @@ if __name__=="__main__":
     # global optim partial config
     fedavg_kw = {'lr':cData.server_lr,'weights':None}
     fedavgadaptive_kw = {'lr':cData.server_lr,'beta_2':cData.beta_2s,'eps':cData.eps,'q':5,'weights':None}
-    fafed_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'q':5,'weights':None}
+    # fafed_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'q':5,'weights':None}
     fedadagrad_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'eps':cData.eps,'weights':None}
     fedyogi_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'weights':None}
     fedadam_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'weights':None}
-    globalOptNames = [FedAvg,FedAvgAdaptive,FAFED,FedAdagrad,FedYogi,FedAdam]
-    globalOptKw = [fedavg_kw,fedavgadaptive_kw,fafed_kw,fedadagrad_kw,fedyogi_kw,fedadam_kw]
+    globalOptNames = [FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam]
+    globalOptKw = [fedavg_kw,fedavgadaptive_kw,fedadagrad_kw,fedyogi_kw,fedadam_kw]
     
     # personalization levels
     pers0 = [] # all shared
