@@ -20,11 +20,12 @@ from torch.nn.functional import mse_loss as MSELoss
 
 from ServerOptimizers import FedAvg,FedAvgAdaptive,FedAdagrad,FedYogi,FedAdam
 from ClientOptimizers import Prox, ProxAdam, Adam, AdamAMS
-from utils import DatasetCleaner, ModelExtractor, set_seed
+from utils import DatasetCleaner, set_seed
 
 #args
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--state',type=str,default='CA')
+parser.add_argument('--alpha',type=float,default=1e-2)
 parser.add_argument('--choice_local',type=int,choices = [0,1,2,3])
 args = parser.parse_args()
  
@@ -54,8 +55,8 @@ class CData:
         self.global_epochs = 40
         self.net_hidden_size = 25
         self.n_lstm_layers = 1
-        self.weight_decay = 1e-1
-        self.test_every = 8
+        self.weight_decay = args.alpha
+        self.test_every = 10
         self.save_at_end = True
         
 def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
@@ -70,25 +71,25 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
     
     if rank == 0:
         # server
-        model = LSTMForecast(**model_kw).to(device) if global_name!='FedAvgAdaptive' else [LSTMForecast(**model_kw).to(device) for _ in range(total_clients)]# server's aggregate model
+        model = LSTMForecast(**model_kw).to(device) if global_name!='FedAvgAdaptive' and global_name!='FAFED' else [LSTMForecast(**model_kw).to(device) for _ in range(total_clients)]# server's aggregate model
         globalOpt = global_opt(model=model,n_clients=total_clients,**global_kw)
         for e_global in range(cData.global_epochs):
             for cidx in range(total_clients):
-                if global_name == 'FedAvgAdaptive':
+                if global_name == 'FedAvgAdaptive' or global_name == 'FAFED':
                     comm.Send([globalOpt.mes[cidx].get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
                 else:
                     comm.Send([globalOpt.me.get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
                 # comm.Send([globalOpt.c.astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=1)
-            grads, deltaC = [], []
+            grads = []
             for cidx in range(total_clients):
-                buf, buf_C = np.empty(globalOpt.num_params,dtype=np.float64), np.empty(globalOpt.num_params,dtype=np.float64)
+                buf = np.empty(globalOpt.num_params,dtype=np.float64)
                 comm.Recv([buf,MPI.DOUBLE],source=cidx+1,tag=0)
                 # comm.Recv([buf_C,MPI.DOUBLE],source=cidx+1,tag=1)
                 grads.append(buf.copy())
                 # deltaC.append(buf_C.copy())
             globalOpt.aggregate_and_update(grads=grads)
             # globalOpt.c += np.mean(np.array(deltaC),axis=0)
-        returnME = globalOpt.mes[0] if global_name=='FedAvgAdaptive' else globalOpt.me
+        returnME = globalOpt.mes[0] if (global_name=='FedAvgAdaptive' or global_name=='FAFED') else globalOpt.me
         return None,returnME
     
     else:
@@ -109,7 +110,7 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
             before_update = localOpt.me.get_flattened_params()
             if p_name != 'All layers personalized':
                 localOpt.reset_counter()
-            for e_local in range(cData.local_epochs):
+            for _ in range(cData.local_epochs):
                 input, label = dset.sample_train(cData.batch_size)
                 localOpt.update(input,label,buf)
                 # localOpt.update_variates()
@@ -159,7 +160,8 @@ if __name__=="__main__":
     
     # global optim partial config
     fedavg_kw = {'lr':cData.server_lr,'weights':None}
-    fedavgadaptive_kw = {'lr':cData.server_lr,'beta':cData.beta,'eps':cData.eps,'q':5,'weights':None}
+    fedavgadaptive_kw = {'lr':cData.server_lr,'beta_2':cData.beta_2s,'eps':cData.eps,'q':5,'weights':None}
+    # fafed_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'q':5,'weights':None}
     fedadagrad_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'eps':cData.eps,'weights':None}
     fedyogi_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'weights':None}
     fedadam_kw = {'lr':cData.server_lr,'beta_1':cData.beta_1s,'beta_2':cData.beta_2s,'eps':cData.eps,'weights':None}
@@ -168,10 +170,14 @@ if __name__=="__main__":
     
     # personalization levels
     pers0 = [] # all shared
-    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer3.weight','FCLayer2.bias','prelu1.weight','prelu2.weight'] # linear head personalized
+    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias','prelu1.weight','prelu2.weight'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
-    pLayers = [pers0,pers1,pers2]
-    pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
+    # pLayers = [pers0,pers1,pers2]
+    # pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
+    
+    #to change later
+    pLayers = [pers0]
+    pLayerNames = ['All layers shared']
     
     # loop testing
     for pl,pn in zip(pLayers,pLayerNames):
@@ -210,15 +216,15 @@ if __name__=="__main__":
             plt.gca().yaxis.set_minor_locator(MultipleLocator(1))
             for i in range(errMat.shape[0]):
                 for j in range(errMat.shape[1]):
-                    plt.annotate(f"{errMat[i, j]:.4f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
+                    plt.annotate(f"{errMat[i, j]:.6f}", xy=(0.5+j, 0.5+i), ha='center', va='center', color='black')
             states = {'NY':'New York','CA':'California','IL':'Illinois'}
-            plt.title(r"Dataset:$\textbf{%s}$, Personalization:$\textbf{%s}$%sAverage test MASE across all clients"%(
-                f'{states[cData.state]}',f'{pn}',f'\n'
+            plt.title(r"Dataset:$\textbf{%s}$,%sPersonalization:$\textbf{%s}$%sAverage test MASE across all clients%sProximal param. $\alpha=%s$"%(
+                f'{states[cData.state]}',f'\n',f'{pn}',f'\n',f'\n',f'{cData.weight_decay}'
             ))
             plt.colorbar()
             plt.grid(which='minor',color='k')
-            plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat_{localOptNames[0].__name__}_{pn}.pdf',format='pdf',bbox_inches='tight') 
+            plt.savefig(os.getcwd()+f'/experiments{cData.state}/errMat_{localOptNames[0].__name__}_{pn}_{cData.weight_decay}.pdf',format='pdf',bbox_inches='tight') 
             plt.close()
             with open(expath+'/results.txt',"a") as file:
-                file.write(f"\ndt={str(datetime.now())}\nFor global={[i.__name__ for i in globalOptNames]},\n local={[i.__name__ for i in localOptNames]},\n state={cData.state}, pers={pn} MASES are:\n")
+                file.write(f"\ndt={str(datetime.now())}\nFor global={[i.__name__ for i in globalOptNames]},\n local={[i.__name__ for i in localOptNames]},\n state={cData.state}, pers={pn}, alpha={cData.weight_decay} MASES are:\n")
                 file.write(f"{errMat}\n")
