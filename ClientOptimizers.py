@@ -15,6 +15,7 @@ class Prox:
         self.weight_decay = weight_decay
         self.update_count = 1
         self.nparams = self.me.num_params
+        self.slayer_mask = self.me.gen_mask_for_slayers()
         
         self.init_state()
         
@@ -41,7 +42,7 @@ class Prox:
         grad_collector = []
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)#*self.me.gen_mask_for_slayers() 
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)*self.slayer_mask
         self.x -= self.lr*( grad  )
         self.me.set_flattened_params_all(self.x)
         self.update_count += 1
@@ -56,6 +57,7 @@ class ProxAdam:
         self.me = ModelExtractor(self.model,p_layers)
         self.update_count = 1
         self.nparams = self.me.num_params
+        self.slayer_mask = self.me.gen_mask_for_slayers()
         
         self.lr = lr
         self.beta_1 = beta_1
@@ -92,7 +94,7 @@ class ProxAdam:
         grad_collector = []
         for _,m in self.model.named_parameters():
             grad_collector.append(m.grad.flatten())
-        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)#*self.me.gen_mask_for_slayers()
+        grad = torch.cat(grad_collector,dim=-1).detach().cpu().numpy()+self.weight_decay*(self.x-target_params)*self.slayer_mask
         self.m = self.beta_1*self.m + (1-self.beta_1)*grad
         self.v = self.beta_2*self.v + (1-self.beta_2)*np.square(grad)
         self.mhat = self.m / (1-np.power(self.beta_1,self.update_count))

@@ -22,55 +22,24 @@ class ModelExtractor:
     
     def get_flattened_params(self):
         
-        paramvals = []
-        for _,v in self.model.named_parameters():
-           paramvals.append(v.detach().flatten().cpu().numpy().copy())
-           
-        return np.concatenate(paramvals,axis=0)
+        return nn.utils.parameters_to_vector(self.model.parameters()).detach().cpu().numpy()
     
     def set_flattened_params_all(self,fparams):
-
-        cnt, sd = 0, self.model.state_dict().copy()
-        for k,v in self.model.named_parameters():
-            sd[k] = torch.tensor(fparams[cnt:cnt+torch.numel(v)]).reshape(v.shape).to(sd[k].dtype)
-            cnt += torch.numel(sd[k])
-        self.model.load_state_dict(sd)
+        
+        pointer = 0
+        fp = torch.tensor(fparams).to(next(self.model.parameters()).dtype).to(next(self.model.parameters()).device)
+        for _,v in self.model.named_parameters():
+            v.data.copy_(fp[pointer:pointer+v.numel()].view_as(v))
+            pointer += v.numel()
         
     def set_flattened_params_shared(self,fparams):
         
-        assert fparams.shape[0] == self.num_params, "SHAPE MISMATCH"
-        
-        cnt, sd = 0, self.model.state_dict().copy()
+        pointer = 0
+        fp = torch.tensor(fparams).to(next(self.model.parameters()).dtype).to(next(self.model.parameters()).device)
         for k,v in self.model.named_parameters():
-            if k in self.pers_layers:
-                cnt += torch.numel(sd[k])
-                del sd[k]
-            else:
-                sd[k] = torch.tensor(fparams[cnt:cnt+torch.numel(v)]).reshape(v.shape).to(sd[k].dtype)
-                cnt += torch.numel(sd[k])
-        self.model.load_state_dict(sd,strict=False)
-        
-    def unset_param_grad(self):
-        
-        for param in self.model.parameters():
-            if param.grad is not None:
-                param.grad.detach_()
-                param.grad.zero_()
-                
-    def get_dtype(self):
-        
-        # get datatype of params
-        for p in self.model.parameters():
-            return p.dtype
-        
-    def gen_mask_for_players(self):
-        
-        # generate a mask for personalized layers
-        maskVals = []
-        for k,v in self.model.named_parameters():
-            mask = np.ones(torch.numel(v)) if k in self.pers_layers else np.zeros(torch.numel(v))
-            maskVals.append(mask)
-        return np.concatenate(maskVals,axis=0)
+            if k not in self.pers_layers:
+                v.data.copy_(fp[pointer:pointer+v.numel()].view_as(v))
+            pointer += v.numel()
     
     def gen_mask_for_slayers(self):
         

@@ -59,7 +59,7 @@ class CData:
         self.test_every = 10
         self.save_at_end = True
         
-def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
+def learn_model(comm,dset,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
     
     # master function to do fed learning
     
@@ -76,46 +76,36 @@ def learn_model(comm,cData,local_kw,local_opt,local_name,global_kw,global_opt,gl
         for e_global in range(cData.global_epochs):
             for cidx in range(total_clients):
                 if global_name == 'FedAvgAdaptive' or global_name == 'FAFED':
-                    comm.Send([globalOpt.mes[cidx].get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
+                    comm.Send([globalOpt.mes[cidx].get_flattened_params().astype(np.float32),MPI.FLOAT],dest=cidx+1,tag=0)
                 else:
-                    comm.Send([globalOpt.me.get_flattened_params().astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=0)
-                # comm.Send([globalOpt.c.astype(np.float64),MPI.DOUBLE],dest=cidx+1,tag=1)
+                    comm.Send([globalOpt.me.get_flattened_params().astype(np.float32),MPI.FLOAT],dest=cidx+1,tag=0)
             grads = []
             for cidx in range(total_clients):
-                buf = np.empty(globalOpt.num_params,dtype=np.float64)
-                comm.Recv([buf,MPI.DOUBLE],source=cidx+1,tag=0)
-                # comm.Recv([buf_C,MPI.DOUBLE],source=cidx+1,tag=1)
+                buf = np.empty(globalOpt.num_params,dtype=np.float32)
+                comm.Recv([buf,MPI.FLOAT],source=cidx+1,tag=0)
                 grads.append(buf.copy())
-                # deltaC.append(buf_C.copy())
             globalOpt.aggregate_and_update(grads=grads)
-            # globalOpt.c += np.mean(np.array(deltaC),axis=0)
         returnME = globalOpt.mes[0] if (global_name=='FedAvgAdaptive' or global_name=='FAFED') else globalOpt.me
         return None,returnME
     
     else:
         # clients
         client_id = rank - 1 # because 0 is server
-        dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=client_id,clientList=np.arange(comm.Get_size()-1).tolist(),seq_len=cData.seq_len,
-                lookahead=cData.lookahead,train_test_split=cData.train_test_split,device=device)
         model = LSTMForecast(**model_kw).to(device) # client's local model
         localOpt = local_opt(model=model,p_layers=p_layers,**local_kw)
         mase_test = []
         for e_global in range(cData.global_epochs):
-            buf = np.empty(localOpt.me.num_params,dtype=np.float64)
-            comm.Recv([buf,MPI.DOUBLE],source=0,tag=0)
+            buf = np.empty(localOpt.me.num_params,dtype=np.float32)
+            comm.Recv([buf,MPI.FLOAT],source=0,tag=0)
             if local_name in ['Adam','AdamAMS']:
                 localOpt.me.set_flattened_params_shared(buf)
-            # buf_c = np.empty(localOpt.me.num_params,dtype=np.float64)
-            # comm.Recv([buf_c,MPI.DOUBLE],source=0,tag=1)
             before_update = localOpt.me.get_flattened_params()
             if p_name != 'All layers personalized':
                 localOpt.reset_counter()
             for _ in range(cData.local_epochs):
                 input, label = dset.sample_train(cData.batch_size)
                 localOpt.update(input,label,buf)
-                # localOpt.update_variates()
-            comm.Send([(localOpt.me.get_flattened_params()-before_update).astype(np.float64),MPI.DOUBLE],dest=0,tag=0)
-            # comm.Send([localOpt.delta.astype(np.float64),MPI.DOUBLE],dest=0,tag=1)
+            comm.Send([(localOpt.me.get_flattened_params()-before_update).astype(np.float32),MPI.FLOAT],dest=0,tag=0)
             if (e_global+1) % cData.test_every == 0 or e_global == cData.global_epochs-1:
                 mase = lambda y,x,p: np.mean(np.abs(x - y)) / np.mean(np.abs(x - p))
                 test_in, test_out, test_persistence = dset.get_test_dset()
@@ -180,7 +170,8 @@ if __name__=="__main__":
         errMat = np.zeros(shape=(len(localOptNames),len(globalOptNames)))
         for li,(lo,lk) in enumerate(zip(localOptNames,localOptKw)):
             for gi,(go,gk) in enumerate(zip(globalOptNames,globalOptKw)):
-                errors, me = learn_model(comm,cData,lk,lo,lo.__name__,gk,go,go.__name__,model_kw,pl,pn,device)
+                dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=comm.Get_rank()-1,clientList=np.arange(comm.Get_size()-1).tolist(),seq_len=cData.seq_len,lookahead=cData.lookahead,train_test_split=cData.train_test_split,device=device) if comm.Get_rank()!=0 else None
+                errors, me = learn_model(comm,dset,cData,lk,lo,lo.__name__,gk,go,go.__name__,model_kw,pl,pn,device)
                 if cData.save_at_end:
                     topdir = os.getcwd()+f"/experiments{cData.state}/{pn}_{go.__name__}_{lo.__name__}/{'server' if comm.Get_rank()==0 else f'client{comm.Get_rank()-1}'}"
                     expath = os.getcwd()+f"/experiments{cData.state}"
