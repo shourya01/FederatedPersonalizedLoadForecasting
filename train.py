@@ -86,8 +86,8 @@ def learn_model(comm,dset,cData,local_kw,local_opt,local_name,global_kw,global_o
                 grads.append(buf.copy())
             globalOpt.aggregate_and_update(grads=grads)
             if (e_global+1) % cData.test_every == 0 or e_global == cData.global_epochs-1:
+                collector,buf_mase = np.array(0.,dtype=np.float32), np.array(0.,dtype=np.float32)
                 for cidx in range(total_clients):
-                    collector,buf_mase = np.array(0.,dtype=np.float32), np.array(0.,dtype=np.float32)
                     comm.Recv([buf_mase,MPI.FLOAT],source=cidx+1,tag=100)
                     collector += buf_mase / total_clients
                 print(f"On epoch {e_global+1}, local: {local_name}, global: {global_name}, pers:{p_name}, average test MASE is {collector:.6f}.",flush=True)
