@@ -85,6 +85,13 @@ def learn_model(comm,dset,cData,local_kw,local_opt,local_name,global_kw,global_o
                 comm.Recv([buf,MPI.FLOAT],source=cidx+1,tag=0)
                 grads.append(buf.copy())
             globalOpt.aggregate_and_update(grads=grads)
+            if (e_global+1) % cData.test_every == 0 or e_global == cData.global_epochs-1:
+                for cidx in range(total_clients):
+                    collector,buf_mase = np.array(0.,dtype=np.float32), np.array(0.,dtype=np.float32)
+                    comm.Recv([buf_mase,MPI.FLOAT],source=cidx+1,tag=100)
+                    collector += buf_mase / total_clients
+                print(f"On epoch {e_global+1}, local: {local_name}, global: {global_name}, pers:{p_name}, average test MASE is {collector:.6f}.",flush=True)
+
         returnME = globalOpt.mes[0] if (global_name=='FedAvgAdaptive' or global_name=='FAFED') else globalOpt.me
         return None,returnME
     
@@ -110,7 +117,7 @@ def learn_model(comm,dset,cData,local_kw,local_opt,local_name,global_kw,global_o
                 mase = lambda y,x,p: np.mean(np.abs(x - y)) / np.mean(np.abs(x - p))
                 test_in, test_out, test_persistence = dset.get_test_dset()
                 loss_val = mase(model(test_in).detach().cpu().flatten().numpy()*(dset.pmax-dset.pmin)+dset.pmin,test_out.cpu().flatten().numpy(),test_persistence.cpu().flatten().numpy()).item()
-                print(f"Pers:{p_name}, local:{local_name}, global: {global_name}, epoch: {e_global+1}, client: {client_id+1}, test MASE loss is {loss_val}.",flush=True)
+                comm.Send([np.array(loss_val,dtype=np.float32),MPI.FLOAT],dest=0,tag=100)
                 mase_test.append(loss_val)
         return mase_test,localOpt.me
 
@@ -160,7 +167,7 @@ if __name__=="__main__":
     
     # personalization levels
     pers0 = [] # all shared
-    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias','prelu1.weight','prelu2.weight'] # linear head personalized
+    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
     pLayers = [pers0,pers1,pers2]
     pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
