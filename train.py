@@ -31,6 +31,9 @@ args = parser.parse_args()
  
 # we use convention that the update should be 'added' to states
 # do local gradient calcs accordingly
+
+# useful lambda functions
+setminus = lambda list1, list2: [item for item in list1 if item not in set(list2)]
         
 class CData:
     
@@ -59,7 +62,7 @@ class CData:
         self.test_every = 10
         self.save_at_end = True
         
-def learn_model(comm,dset,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device):
+def learn_model(comm,dset,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device,extra_str=''):
     
     # master function to do fed learning
     
@@ -90,7 +93,7 @@ def learn_model(comm,dset,cData,local_kw,local_opt,local_name,global_kw,global_o
                 for cidx in range(total_clients):
                     comm.Recv([buf_mase,MPI.FLOAT],source=cidx+1,tag=100)
                     collector += buf_mase / total_clients
-                print(f"On epoch {e_global+1}, local: {local_name}, global: {global_name}, pers:{p_name}, average test MASE is {collector:.6f}.",flush=True)
+                print(f"{extra_str}: On epoch {e_global+1}, local: {local_name}, global: {global_name}, pers:{p_name}, average test MASE is {collector:.6f}.",flush=True)
 
         returnME = globalOpt.mes[0] if (global_name=='FedAvgAdaptive' or global_name=='FAFED') else globalOpt.me
         return None,returnME
@@ -167,7 +170,7 @@ if __name__=="__main__":
     
     # personalization levels
     pers0 = [] # all shared
-    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias'] # linear head personalized
+    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
     pLayers = [pers0,pers1,pers2]
     pLayerNames = ['All layers shared','MLP personalized','All layers personalized']
@@ -178,7 +181,7 @@ if __name__=="__main__":
         for li,(lo,lk) in enumerate(zip(localOptNames,localOptKw)):
             for gi,(go,gk) in enumerate(zip(globalOptNames,globalOptKw)):
                 dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=comm.Get_rank()-1,clientList=np.arange(comm.Get_size()-1).tolist(),seq_len=cData.seq_len,lookahead=cData.lookahead,train_test_split=cData.train_test_split,device=device) if comm.Get_rank()!=0 else None
-                errors, me = learn_model(comm,dset,cData,lk,lo,lo.__name__,gk,go,go.__name__,model_kw,pl,pn,device)
+                errors, me = learn_model(comm,dset,cData,lk,lo,lo.__name__,gk,go,go.__name__,model_kw,pl,pn,device,cData.state)
                 if cData.save_at_end:
                     topdir = os.getcwd()+f"/experiments{cData.state}/{pn}_{go.__name__}_{lo.__name__}/{'server' if comm.Get_rank()==0 else f'client{comm.Get_rank()-1}'}"
                     expath = os.getcwd()+f"/experiments{cData.state}"

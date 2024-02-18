@@ -16,9 +16,10 @@ cd ~/FederatedPersonalizedLoadForecasting
 ENVN="APPFLENV"
 STATE="IL"
 STATE2="NY"
+STATE3="CA"
 PATH="/home/sbose/.latex/bin/x86_64-linux:${PATH}"
 
-echo "SLURM_CPUS_ON_NODE ${SLURM_CPUS_ON_NODE}"
+echo "SLURM_CPUS_ON_NODE 64"
 echo "SLURM_JOB_NODELIST ${SLURM_JOB_NODELIST}"
 echo "SLURM_NTASKS ${SLURM_NTASKS}"
 echo "SLURM_JOB_GPUS ${SLURM_JOB_GPUS}"
