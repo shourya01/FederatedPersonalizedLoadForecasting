@@ -3,22 +3,25 @@ import torch.nn as nn
 
 class LSTMForecast(nn.Module):
     
-    def __init__(self,n_features,n_lookback,n_lstm_layers,n_hidden_size):
+    def __init__(self,n_features,n_lookback,n_lstm_layers,n_hidden_size,pre_output_size=10):
         super(LSTMForecast,self).__init__()
         self.n_features = n_features
         self.lookback = n_lookback
         self.n_lstm_layers = n_lstm_layers
         self.n_hidden_size = n_hidden_size
         self.fcnn_in_size = self.n_hidden_size*self.lookback
-        self.pre_output_size = 30
+        self.pre_output_size = pre_output_size
         
         # LSTM
         self.lstm_model = nn.LSTM(input_size=n_features,hidden_size=n_hidden_size,num_layers=n_lstm_layers,batch_first=True,bidirectional=False)
         
         # FCNN 
-        self.FCLayer1 = nn.Linear(self.fcnn_in_size,self.pre_output_size)
-        self.FCLayer2 = nn.Linear(self.pre_output_size,1)
-        self.gelu1 = nn.GELU()
+        self.FCLayer1 = nn.Linear(self.fcnn_in_size,self.fcnn_in_size//2)
+        self.FCLayer2 = nn.Linear(self.fcnn_in_size//2,self.pre_output_size)
+        self.FCLayer3 = nn.Linear(self.pre_output_size,1)
+        self.activation = nn.GELU()
+        # self.prelu2 = nn.PReLU(self.pre_output_size)
+        # self.prelu3 = nn.PReLU(self.pre_output_size)
         
         
     def forward(self,x):
@@ -53,8 +56,10 @@ class LSTMForecast(nn.Module):
         
         # pass LSTM outputs through a FCNN
         x = self.FCLayer1(x)
-        x = self.gelu1(x)
+        x = self.activation(x)
         x = self.FCLayer2(x)
+        x = self.activation(x)
+        x = self.FCLayer3(x)
         
         # rake absolute value of output to ensure non-negativity
         return x.abs()

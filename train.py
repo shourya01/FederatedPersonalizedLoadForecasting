@@ -25,7 +25,7 @@ from utils import DatasetCleaner, set_seed
 #args
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--state',type=str,default='CA')
-parser.add_argument('--alpha',type=float,default=1e-2)
+parser.add_argument('--alpha',type=float,default=1e-1)
 parser.add_argument('--choice_local',type=int,choices = [0,1,2,3])
 args = parser.parse_args()
  
@@ -44,7 +44,7 @@ class CData:
         self.lookahead = 4
         self.batch_size = 16
         self.lr = 1e-3
-        self.server_lr = 1e-2
+        self.server_lr = 1e-3
         self.beta = 0.5
         self.beta_1 = 0.5
         self.beta_2 = 0.9
@@ -54,12 +54,12 @@ class CData:
         self.n_clients = 12
         self.state = args.state
         self.train_test_split = 0.8
-        self.local_epochs = 125
-        self.global_epochs = 40
+        self.local_epochs = 100
+        self.global_epochs = 100
         self.net_hidden_size = 25
-        self.n_lstm_layers = 1
         self.weight_decay = args.alpha
-        self.test_every = 10
+        self.test_every = 1000
+        self.n_lstm_layers = 1
         self.save_at_end = True
         
 def learn_model(comm,dset,cData,local_kw,local_opt,local_name,global_kw,global_opt,global_name,model_kw,p_layers,p_name,device,extra_str=''):
@@ -170,8 +170,10 @@ if __name__=="__main__":
     
     # personalization levels
     pers0 = [] # all shared
-    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias'] # linear head personalized
+    #pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias','FCLayer3.weight','FCLayer3.bias','FCLayer4.weight','FCLayer4.bias'] # deprecated; see below
+    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight']
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
+    # pers1 = setminus(pers2,pers1) # MLP shared
     pLayers = [pers0,pers1,pers2]
     pLayerNames = ['All layers shared','MLP personalized','All layers personalized']
     
