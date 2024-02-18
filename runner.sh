@@ -1,43 +1,50 @@
 #!/bin/bash -l
 #SBATCH --job-name=HETERO
 #SBATCH --output=HET.log
-#SBATCH --account=NEXTGENOPT    
+#SBATCH --account=NEXTGENOPT  
+#SBATCH --nodes=1
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:8
+#SBATCH --exclusive
+#SBATCH --ntasks=26
 #SBATCH --time=23:59:59
-
 
 nvidia-smi
 
 cd ~/FederatedPersonalizedLoadForecasting
 
-export ENVN="APPFLENV"
-export STATE="IL"
-export STATE2="NY"
-export PATH="/home/sbose/.latex/bin/x86_64-linux:${PATH}"
-NUM_PROC=2
+ENVN="APPFLENV"
+STATE="IL"
+STATE2="NY"
+PATH="/home/sbose/.latex/bin/x86_64-linux:${PATH}"
 
+echo "SLURM_CPUS_ON_NODE ${SLURM_CPUS_ON_NODE}"
+echo "SLURM_JOB_NODELIST ${SLURM_JOB_NODELIST}"
+echo "SLURM_NTASKS ${SLURM_NTASKS}"
+echo "SLURM_JOB_GPUS ${SLURM_JOB_GPUS}"
+
+# do math
+CPU_PER_PROC=$((64/SLURM_NTASKS))
+echo "CPU_PER_PROC ${CPU_PER_PROC}"
+
+# start code
 module load anaconda3
 source activate $ENVN
 conda info
 
-srun --exclusive --ntasks 13 --cpus-per-task $NUM_PROC --mem-per-cpu 36GB python train.py --state $STATE --choice_local 0
+srun -n 13 --gpus=4 --cpus-per-task=$CPU_PER_PROC --mem-per-cpu=10GB --exclusive python train.py --state $STATE &
+srun -n 13 --gpus=4 --cpus-per-task=$CPU_PER_PROC --mem-per-cpu=10GB --exclusive python train.py --state $STATE2 &
 wait
-srun --exclusive --ntasks 13 --cpus-per-task $NUM_PROC --mem-per-cpu 36GB python train.py --state $STATE --choice_local 1
-wait
-srun --exclusive --ntasks 13 --cpus-per-task $NUM_PROC --mem-per-cpu 36GB python train.py --state $STATE --choice_local 2
-wait
-srun --exclusive --ntasks 13 --cpus-per-task $NUM_PROC --mem-per-cpu 36GB python train.py --state $STATE --choice_local 3
-wait
+# srun -n 13 --gpus=2 --cpus-per-task=2 --mem-per-cpu=10GB --exclusive python train.py --state $STATE --choice_local 2 &
+# srun -n 13 --gpus=2 --cpus-per-task=2 --mem-per-cpu=10GB --exclusive python train.py --state $STATE --choice_local 3 &
+# wait
 
-srun --exclusive --ntasks 13 --cpus-per-task $NUM_PROC --mem-per-cpu 36GB python train.py --state $STATE2 --choice_local 0
-wait
-srun --exclusive --ntasks 13 --cpus-per-task $NUM_PROC --mem-per-cpu 36GB python train.py --state $STATE2 --choice_local 1
-wait
-srun --exclusive --ntasks 13 --cpus-per-task $NUM_PROC --mem-per-cpu 36GB python train.py --state $STATE2 --choice_local 2
-wait
-srun --exclusive --ntasks 13 --cpus-per-task $NUM_PROC --mem-per-cpu 36GB python train.py --state $STATE2 --choice_local 3
-wait
+# srun -n 13 --gpus=2 --cpus-per-task=2 --mem-per-cpu=10GB --exclusive python train.py --state $STATE2 --choice_local 0 &
+# srun -n 13 --gpus=2 --cpus-per-task=2 --mem-per-cpu=10GB --exclusive python train.py --state $STATE2 --choice_local 1 &
+# wait
+# srun -n 13 --gpus=2 --cpus-per-task=2 --mem-per-cpu=10GB --exclusive python train.py --state $STATE2 --choice_local 2 &
+# srun -n 13 --gpus=2 --cpus-per-task=2 --mem-per-cpu=10GB --exclusive python train.py --state $STATE2 --choice_local 3 &
+# wait
 
 cp train.py "experiments${STATE}/train.py"
 cp train.sh "experiments${STATE}/train.sh"

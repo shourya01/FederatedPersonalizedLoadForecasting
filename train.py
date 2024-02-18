@@ -152,8 +152,8 @@ if __name__=="__main__":
     adamams_kw = {'lr':cData.lr,'beta_1':cData.beta_1,'beta_2':cData.beta_2,'eps':cData.eps}
     localOptNames = [Prox,ProxAdam,Adam,AdamAMS]
     localOptKw = [prox_kw,proxadam_kw,adam_kw,adamams_kw]
-    localOptNames = [localOptNames[args.choice_local]]
-    localOptKw = [localOptKw[args.choice_local]]
+    # localOptNames = [localOptNames[args.choice_local]]
+    # localOptKw = [localOptKw[args.choice_local]]
     
     # global optim partial config
     fedavg_kw = {'lr':cData.server_lr,'weights':None}
@@ -170,7 +170,7 @@ if __name__=="__main__":
     pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias'] # linear head personalized
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
     pLayers = [pers0,pers1,pers2]
-    pLayerNames = ['All layers shared','Linear head personalized','All layers personalized']
+    pLayerNames = ['All layers shared','MLP personalized','All layers personalized']
     
     # loop testing
     for pl,pn in zip(pLayers,pLayerNames):
@@ -221,4 +221,4 @@ if __name__=="__main__":
             plt.close()
             with open(expath+'/results.txt',"a") as file:
                 file.write(f"\ndt={str(datetime.now())}\nFor global={[i.__name__ for i in globalOptNames]},\n local={[i.__name__ for i in localOptNames]},\n state={cData.state}, pers={pn}, alpha={cData.weight_decay} MASES are:\n")
-                file.write(f"{errMat}\n")
+                file.write(repr(errMat))
