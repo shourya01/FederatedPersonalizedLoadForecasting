@@ -10,14 +10,14 @@ class LSTMForecast(nn.Module):
         self.n_lstm_layers = n_lstm_layers
         self.n_hidden_size = n_hidden_size
         self.fcnn_in_size = self.n_hidden_size*self.lookback
-        self.pre_output_size = 10
+        self.pre_output_size = 30
         
         # LSTM
         self.lstm_model = nn.LSTM(input_size=n_features,hidden_size=n_hidden_size,num_layers=n_lstm_layers,batch_first=True,bidirectional=False)
         
         # FCNN 
-        self.FCLayer1 = nn.Linear(self.fcnn_in_size,self.fcnn_in_size//2)
-        self.FCLayer2 = nn.Linear(self.fcnn_in_size//2,self.pre_output_size)
+        self.FCLayer1 = nn.Linear(self.fcnn_in_size,self.pre_output_size)
+        self.FCLayer2 = nn.Linear(self.pre_output_size,1)
         self.gelu1 = nn.GELU()
         
         
