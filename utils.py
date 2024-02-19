@@ -54,7 +54,7 @@ class DatasetCleaner:
     
     # ingest numpy file, output random samples of train, or test set
     
-    def __init__(self,dset,cidx=0,clientList=[],seq_len=12,lookahead=4,train_test_split=0.8,dtype=torch.float32,device='cpu'):
+    def __init__(self,dset,cidx=0,clientList=[],seq_len=12,lookahead=4,train_test_split_1=0.8,train_test_split_2=0.9,dtype=torch.float32,device='cpu'):
         
         self.dset = dset[:,:,:].copy()
         self.cidx = cidx
@@ -64,7 +64,8 @@ class DatasetCleaner:
             self.clientList = clientList
         self.seq_len = seq_len
         self.lookahead = lookahead
-        self.tts = train_test_split
+        self.tts1 = train_test_split_1
+        self.tts2 = train_test_split_2
         self.device = device
         self.dtype = dtype
         
@@ -73,8 +74,8 @@ class DatasetCleaner:
         
     def train_test_split(self):
         
-        self.dset_train = self.dset[:,:int(self.tts*self.dset.shape[1]),:].copy()
-        self.dset_test = self.dset[:,int(self.tts*self.dset.shape[1]):,:].copy()
+        self.dset_train = self.dset[:,:int(self.tts1*self.dset.shape[1]),:].copy()
+        self.dset_test = self.dset[:,int(self.tts2*self.dset.shape[1]):,:].copy()
         self.dset_test_unscaled = self.dset_test.copy()
         minval,maxval = [], []
         

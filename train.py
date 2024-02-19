@@ -25,7 +25,7 @@ from utils import DatasetCleaner, set_seed
 #args
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--state',type=str,default='CA')
-parser.add_argument('--alpha',type=float,default=1e-1)
+parser.add_argument('--alpha',type=float,default=1e-2)
 parser.add_argument('--choice_local',type=int,choices = [0,1,2,3])
 args = parser.parse_args()
  
@@ -43,8 +43,8 @@ class CData:
         self.seq_len = 12
         self.lookahead = 4
         self.batch_size = 16
-        self.lr = 1e-3
-        self.server_lr = 1e-3
+        self.lr = 5e-3
+        self.server_lr = 5e-3
         self.beta = 0.5
         self.beta_1 = 0.5
         self.beta_2 = 0.9
@@ -53,10 +53,11 @@ class CData:
         self.eps = 1e-8
         self.n_clients = 12
         self.state = args.state
-        self.train_test_split = 0.8
+        self.train_test_split_1 = 0.8
+        self.train_test_split_2 = 0.9
         self.local_epochs = 100
-        self.global_epochs = 100
-        self.net_hidden_size = 25
+        self.global_epochs = 60
+        self.net_hidden_size = 20
         self.weight_decay = args.alpha
         self.test_every = 1000
         self.n_lstm_layers = 1
@@ -171,18 +172,22 @@ if __name__=="__main__":
     # personalization levels
     pers0 = [] # all shared
     #pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias','FCLayer3.weight','FCLayer3.bias','FCLayer4.weight','FCLayer4.bias'] # deprecated; see below
-    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight']
+    pers1 = ['FCLayer1.weight','FCLayer1.bias','FCLayer2.weight','FCLayer2.bias','FCLayer3.weight','FCLayer3.bias',
+            'lstm_model.weight_ih_l1',
+            'lstm_model.weight_hh_l1',
+            'lstm_model.bias_ih_l1',
+            'lstm_model.bias_hh_l1']
     pers2 = [layerName for layerName,_ in dummyModel.named_parameters()] # all personalized
     # pers1 = setminus(pers2,pers1) # MLP shared
     pLayers = [pers0,pers1,pers2]
     pLayerNames = ['All layers shared','MLP personalized','All layers personalized']
     
     # loop testing
+    dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=comm.Get_rank()-1,clientList=np.arange(comm.Get_size()-1).tolist(),seq_len=cData.seq_len,lookahead=cData.lookahead,train_test_split_1=cData.train_test_split_1,train_test_split_2=cData.train_test_split_2,device=device) if comm.Get_rank()!=0 else None
     for pl,pn in zip(pLayers,pLayerNames):
         errMat = np.zeros(shape=(len(localOptNames),len(globalOptNames)))
         for li,(lo,lk) in enumerate(zip(localOptNames,localOptKw)):
             for gi,(go,gk) in enumerate(zip(globalOptNames,globalOptKw)):
-                dset = DatasetCleaner(np.load(f"NREL{cData.state}dataset.npz")['data'],cidx=comm.Get_rank()-1,clientList=np.arange(comm.Get_size()-1).tolist(),seq_len=cData.seq_len,lookahead=cData.lookahead,train_test_split=cData.train_test_split,device=device) if comm.Get_rank()!=0 else None
                 errors, me = learn_model(comm,dset,cData,lk,lo,lo.__name__,gk,go,go.__name__,model_kw,pl,pn,device,cData.state)
                 if cData.save_at_end:
                     topdir = os.getcwd()+f"/experiments{cData.state}/{pn}_{go.__name__}_{lo.__name__}/{'server' if comm.Get_rank()==0 else f'client{comm.Get_rank()-1}'}"
