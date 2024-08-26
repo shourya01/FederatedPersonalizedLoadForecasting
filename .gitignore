@@ -1,5 +1,5 @@
 */
-!/models/
+!/.models/
 !/.results/
 !/.testing/
 *.log

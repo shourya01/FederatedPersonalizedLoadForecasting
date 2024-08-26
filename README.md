@@ -1,3 +1,5 @@
+**Note:** The folders starting with a dot '.' contain experimental files for other models. Please ignore.
+
 # Description
 
 Tests out federated learning with personalization layers for load forecasting. Uses NREL ComStock dataset to extract load profiles and other auxiliary data. Working on documentation; currently I'm running the code as follows.
