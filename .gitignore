@@ -1,5 +1,7 @@
 */
-*.ipynb
+!/models/
+!/.results/
+!/.testing/
 *.log
 *.out
 *.sh
