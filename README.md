@@ -1,4 +1,4 @@
-**Note:** The folders starting with a dot '.' contain experimental files for other models. Please ignore.
+**Note:** The folders `.testing`, `.results`, `models`, and `.bigdata` contain experimental files for extensions of this work. Please ignore.
 
 # Description
 
