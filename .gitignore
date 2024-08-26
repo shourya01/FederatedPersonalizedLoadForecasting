@@ -1,8 +1,8 @@
-*/
-!/.models/
+!/.bigdata/
+!/models/
 !/.results/
 !/.testing/
+!/.results/*.pdf
 *.log
 *.out
 *.sh
-*.pdf
