@@ -387,10 +387,10 @@ class Transformer(nn.Module):
     
     def forward(self, x, fut_time, fut_weather):
         
-        x_enc = x[:,:,self.data_idx]
-        x_mark_enc = x[:,:,self.time_idx]
+        x_enc = x[:,:,self.data_idx+self.time_idx]
+        x_mark_enc = None
         x_dec = torch.zeros_like(fut_weather)[:,:,:self.dec_in]
-        x_mark_dec = fut_time
+        x_mark_dec = None
         
         return self.forecast(x_enc,x_mark_enc,x_dec,x_mark_dec)[:,-1,[0]]
         
